@@ -1,0 +1,48 @@
+import React, { useState } from 'react';
+import Sidebar from './Sidebar';
+import DashboardView from './views/DashboardView';
+import WorkplanView from './views/WorkplanView';
+import SettingsView from './views/SettingsView';
+import UserManagementView from './views/UserManagementView';
+
+interface DashboardProps {
+  onLogout: () => void;
+}
+
+export type ViewType = 'dashboard' | 'workplan' | 'settings' | 'user-management';
+
+const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+  const [currentView, setCurrentView] = useState<ViewType>('dashboard');
+
+  const renderView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return <DashboardView />;
+      case 'workplan':
+        return <WorkplanView />;
+      case 'settings':
+        return <SettingsView />;
+      case 'user-management':
+        return <UserManagementView />;
+      default:
+        return <DashboardView />;
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
+      <Sidebar 
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        onLogout={onLogout}
+      />
+      <div className="flex-1 p-6">
+        <div className="bg-white/70 backdrop-blur-md rounded-md border border-white/20 shadow-lg min-h-full">
+          {renderView()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
