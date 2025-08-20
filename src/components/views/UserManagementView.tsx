@@ -54,7 +54,7 @@ const UserManagementView: React.FC = () => {
   ];
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-gray-800 mb-2">User Management</h1>
         <p className="text-gray-600">Manage staff, volunteers, and system access</p>
@@ -82,7 +82,7 @@ const UserManagementView: React.FC = () => {
         <div className="px-6 py-4 border-b border-gray-200/50">
           <h3 className="text-lg font-medium text-gray-800">Recent Users</h3>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-hidden">
           <table className="w-full">
             <thead className="bg-gray-50/80">
               <tr>

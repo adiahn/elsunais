@@ -30,14 +30,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-green-50 to-emerald-100">
+    <div className="flex min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
       <Sidebar 
         currentView={currentView}
         onViewChange={setCurrentView}
         onLogout={onLogout}
       />
-      <div className="flex-1 p-6">
-        <div className="bg-white/70 backdrop-blur-md rounded-md border border-white/20 shadow-lg min-h-full">
+      <div className="flex-1 ml-80 p-6">
+        <div className="bg-white/80 backdrop-blur-md rounded-2xl border border-white/30 shadow-2xl min-h-full">
           {renderView()}
         </div>
       </div>

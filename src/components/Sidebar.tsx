@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calendar, Settings, Users, LogOut, Heart } from 'lucide-react';
+import { LayoutDashboard, Calendar, Settings, Users, LogOut, Users as UsersIcon, Bell } from 'lucide-react';
 import { ViewType } from './Dashboard';
 
 interface SidebarProps {
@@ -10,55 +10,100 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout }) => {
   const menuItems = [
-    { id: 'dashboard' as ViewType, icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'workplan' as ViewType, icon: Calendar, label: 'Workplan' },
-    { id: 'settings' as ViewType, icon: Settings, label: 'Settings' },
-    { id: 'user-management' as ViewType, icon: Users, label: 'User Management' },
+    { id: 'dashboard' as ViewType, icon: LayoutDashboard, label: 'Dashboard', badge: null },
+    { id: 'workplan' as ViewType, icon: Calendar, label: 'Workplan', badge: '3' },
+    { id: 'settings' as ViewType, icon: Settings, label: 'Settings', badge: null },
+    { id: 'user-management' as ViewType, icon: Users, label: 'User Management', badge: '12' },
   ];
 
   return (
-    <div className="w-64 bg-green-800 text-white flex flex-col">
+    <div className="fixed left-0 top-0 h-full w-80 bg-gradient-to-b from-green-800 to-green-900 text-white flex flex-col shadow-xl z-50">
       {/* Logo/Header */}
-      <div className="p-6 border-b border-green-700">
+      <div className="p-6 border-b border-green-700/50">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-green-600 rounded-sm flex items-center justify-center">
-            <Heart className="w-5 h-5" />
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+            <UsersIcon className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="font-semibold text-lg">Admin Portal</h2>
-            <p className="text-green-300 text-xs">Admin Dashboard</p>
+            <h2 className="font-bold text-lg">ACReSAL</h2>
+            <p className="text-green-200 text-xs">Project Management System</p>
           </div>
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="p-4 border-b border-green-700/50">
+        <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-green-200">Active Projects</span>
+            <Bell className="w-4 h-4 text-green-300" />
+          </div>
+          <div className="text-2xl font-bold">23</div>
+          <div className="text-xs text-green-300">+2 this week</div>
         </div>
       </div>
 
       {/* Navigation Menu */}
       <nav className="flex-1 py-6">
-        <ul className="space-y-2 px-3">
+        <div className="px-3 mb-4">
+          <h3 className="text-xs font-semibold text-green-300 uppercase tracking-wider">Main Menu</h3>
+        </div>
+        <ul className="space-y-1 px-3">
           {menuItems.map((item) => (
             <li key={item.id}>
               <button
                 onClick={() => onViewChange(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-md text-left transition-all duration-200 ${
+                className={`w-full flex items-center justify-between px-3 py-3 rounded-xl text-left transition-all duration-200 group ${
                   currentView === item.id
-                    ? 'bg-green-700 text-white shadow-md'
-                    : 'text-green-200 hover:bg-green-700 hover:text-white'
+                    ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm border border-white/20'
+                    : 'text-green-200 hover:bg-white/10 hover:text-white'
                 }`}
               >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium">{item.label}</span>
+                <div className="flex items-center gap-3">
+                  <div className={`p-1.5 rounded-lg transition-all duration-200 ${
+                    currentView === item.id 
+                      ? 'bg-white/20' 
+                      : 'bg-transparent group-hover:bg-white/10'
+                  }`}>
+                    <item.icon className="w-5 h-5" />
+                  </div>
+                  <span className="font-medium">{item.label}</span>
+                </div>
+                {item.badge && (
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    currentView === item.id
+                      ? 'bg-white text-green-800'
+                      : 'bg-green-600 text-white'
+                  }`}>
+                    {item.badge}
+                  </span>
+                )}
               </button>
             </li>
           ))}
         </ul>
       </nav>
 
-      {/* Logout Button */}
-      <div className="p-3 border-t border-green-700">
+      {/* User Profile & Logout */}
+      <div className="p-4 border-t border-green-700/50">
+        <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+              <Users className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium">Admin User</p>
+              <p className="text-xs text-green-200">Administrator</p>
+            </div>
+          </div>
+        </div>
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-3 rounded-md text-green-200 hover:bg-green-700 hover:text-white transition-all duration-200"
+          className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-green-200 hover:bg-red-500/20 hover:text-red-200 transition-all duration-200 group"
         >
-          <LogOut className="w-5 h-5" />
+          <div className="p-1.5 rounded-lg bg-transparent group-hover:bg-red-500/20 transition-all duration-200">
+            <LogOut className="w-5 h-5" />
+          </div>
           <span className="font-medium">Logout</span>
         </button>
       </div>

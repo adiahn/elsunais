@@ -1,72 +1,24 @@
 import React from 'react';
-import { BarChart3, Users, Calendar, TrendingUp } from 'lucide-react';
 
 const DashboardView: React.FC = () => {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-gray-800 mb-2">Dashboard</h1>
-        <p className="text-gray-600">Welcome to your project management portal</p>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard</h1>
+        <p className="text-gray-600">Welcome to your ACReSAL project management portal</p>
       </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white/50 backdrop-blur-sm rounded-md p-6 border border-white/20 shadow-md">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-md flex items-center justify-center">
-              <Users className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Users</p>
-              <p className="text-2xl font-semibold text-gray-800">1,248</p>
-            </div>
+      
+      {/* Empty Dashboard Content */}
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
           </div>
+          <h3 className="text-lg font-medium text-gray-700 mb-2">Dashboard is Empty</h3>
+          <p className="text-gray-500">Content will be added here</p>
         </div>
-
-        <div className="bg-white/50 backdrop-blur-sm rounded-md p-6 border border-white/20 shadow-md">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 rounded-md flex items-center justify-center">
-              <Calendar className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-600">Active Workplans</p>
-              <p className="text-2xl font-semibold text-gray-800">23</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white/50 backdrop-blur-sm rounded-md p-6 border border-white/20 shadow-md">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-md flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-600">Completed Projects</p>
-              <p className="text-2xl font-semibold text-gray-800">156</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white/50 backdrop-blur-sm rounded-md p-6 border border-white/20 shadow-md">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-md flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-600">Growth Rate</p>
-              <p className="text-2xl font-semibold text-gray-800">+12%</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Empty State */}
-      <div className="bg-white/50 backdrop-blur-sm rounded-md p-12 border border-white/20 shadow-md text-center">
-        <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-700 mb-2">Dashboard Analytics Coming Soon</h3>
-        <p className="text-gray-500">
-          This section will display comprehensive analytics and insights about your project operations.
-        </p>
       </div>
     </div>
   );

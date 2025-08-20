@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Calendar, MapPin, Users, Clock, Edit, Trash2, Search, Eye, DollarSign, Building } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, Clock, Search, Eye, DollarSign, Building, X } from 'lucide-react';
 
 interface Workplan {
   id: string;
@@ -51,6 +51,8 @@ const WorkplanView: React.FC = () => {
   ]);
   
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedWorkplan, setSelectedWorkplan] = useState<Workplan | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [newWorkplan, setNewWorkplan] = useState<Omit<Workplan, 'id'>>({
     component: '',
@@ -103,6 +105,11 @@ const WorkplanView: React.FC = () => {
     setShowCreateForm(false);
   };
 
+  const handleViewDetails = (workplan: Workplan) => {
+    setSelectedWorkplan(workplan);
+    setShowDetailsModal(true);
+  };
+
   const filteredWorkplans = workplans.filter(workplan =>
     workplan.component.toLowerCase().includes(searchTerm.toLowerCase()) ||
     workplan.leadImplementation.toLowerCase().includes(searchTerm.toLowerCase())
@@ -141,7 +148,7 @@ const WorkplanView: React.FC = () => {
       {/* Workplans Table */}
       <div className="bg-white/50 backdrop-blur-sm rounded-md border border-white/20 shadow-md overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px]">
+          <table className="w-full min-w-[800px]">
             <thead className="bg-gray-50/80">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -149,12 +156,6 @@ const WorkplanView: React.FC = () => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Duration
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Expected Start Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Expected End Date
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Source of Funding
@@ -183,12 +184,6 @@ const WorkplanView: React.FC = () => {
                     <div className="text-sm text-gray-600">{workplan.duration}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">{workplan.expectedStartDate}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">{workplan.expectedEndDate}</div>
-                  </td>
-                  <td className="px-6 py-4">
                     <div className="flex items-center text-sm text-gray-600">
                       <DollarSign className="w-4 h-4 mr-1" />
                       {workplan.sourceOfFunding}
@@ -210,17 +205,13 @@ const WorkplanView: React.FC = () => {
                     <div className="text-sm text-gray-600">{workplan.procurementMethod}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center space-x-2">
-                      <button className="text-green-600 hover:text-green-800 transition-colors">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button className="text-blue-600 hover:text-blue-800 transition-colors">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button className="text-red-600 hover:text-red-800 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleViewDetails(workplan)}
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-1"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Details
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -228,6 +219,100 @@ const WorkplanView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Workplan Details Modal */}
+      {showDetailsModal && selectedWorkplan && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white/90 backdrop-blur-md rounded-md border border-white/20 shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold text-gray-800">Workplan Details</h2>
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="text-gray-500 hover:text-gray-700 p-1"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Component</h3>
+                    <p className="text-lg font-semibold text-gray-800">{selectedWorkplan.component}</p>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Duration</h3>
+                    <p className="text-lg text-gray-800 flex items-center">
+                      <Clock className="w-5 h-5 mr-2 text-green-600" />
+                      {selectedWorkplan.duration}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Expected Start Date</h3>
+                    <p className="text-lg text-gray-800 flex items-center">
+                      <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+                      {selectedWorkplan.expectedStartDate}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Expected End Date</h3>
+                    <p className="text-lg text-gray-800 flex items-center">
+                      <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+                      {selectedWorkplan.expectedEndDate}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Source of Funding</h3>
+                    <p className="text-lg text-gray-800 flex items-center">
+                      <DollarSign className="w-5 h-5 mr-2 text-green-600" />
+                      {selectedWorkplan.sourceOfFunding}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Lead Implementation</h3>
+                    <p className="text-lg text-gray-800 flex items-center">
+                      <Users className="w-5 h-5 mr-2 text-purple-600" />
+                      {selectedWorkplan.leadImplementation}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Partners</h3>
+                    <p className="text-lg text-gray-800 flex items-center">
+                      <Building className="w-5 h-5 mr-2 text-orange-600" />
+                      {selectedWorkplan.partners}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Procurement Method</h3>
+                    <p className="text-lg text-gray-800">{selectedWorkplan.procurementMethod}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowDetailsModal(false)}
+                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Workplan Modal */}
       {showCreateForm && (
