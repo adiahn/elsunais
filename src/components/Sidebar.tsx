@@ -2,24 +2,13 @@ import React from 'react';
 import { LayoutDashboard, Calendar, Settings, Users, LogOut, Users as UsersIcon, Bell } from 'lucide-react';
 import { ViewType } from './Dashboard';
 
-interface UserData {
-  message: string;
-  token: string;
-  role: string;
-  organizationName: string;
-  email: string;
-  rcNumber: string;
-  status: string;
-}
-
 interface SidebarProps {
   currentView: ViewType;
   onViewChange: (view: ViewType) => void;
   onLogout: () => void;
-  userData: UserData;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, userData }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout }) => {
   const menuItems = [
     { id: 'dashboard' as ViewType, icon: LayoutDashboard, label: 'Dashboard', badge: null },
     { id: 'workplan' as ViewType, icon: Calendar, label: 'Workplan', badge: '3' },
@@ -103,8 +92,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout, 
               <Users className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium">{userData.organizationName}</p>
-              <p className="text-xs text-green-200">{userData.role}</p>
+              <p className="text-sm font-medium">Admin User</p>
+              <p className="text-xs text-green-200">Administrator</p>
             </div>
           </div>
         </div>
