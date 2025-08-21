@@ -2,7 +2,17 @@ import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, ArrowLeft, Users, Globe } from 'lucide-react';
 
 interface AuthPageProps {
-  onLogin: () => void;
+  onLogin: (userData: any) => void;
+}
+
+interface LoginResponse {
+  message: string;
+  token: string;
+  role: string;
+  organizationName: string;
+  email: string;
+  rcNumber: string;
+  status: string;
 }
 
 const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
@@ -10,15 +20,54 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (isLogin) {
-      onLogin();
+      await handleLogin();
     } else if (isForgotPassword) {
       alert('Password reset link sent to your email!');
       setIsForgotPassword(false);
       setIsLogin(true);
+    }
+  };
+
+  const handleLogin = async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('https://auth.api.tefucapital.com/api/authority/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          password: password
+        })
+      });
+
+      const data: LoginResponse = await response.json();
+
+      if (response.ok) {
+        // Store token in localStorage
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('userData', JSON.stringify(data));
+        
+        // Call onLogin with user data
+        onLogin(data);
+      } else {
+        setError(data.message || 'Login failed. Please check your credentials.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -30,6 +79,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
   const handleBackToLogin = () => {
     setIsLogin(true);
     setIsForgotPassword(false);
+    setError('');
   };
 
   return (
@@ -47,7 +97,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         </div>
         
         {/* Welcome Content */}
-        <div className="relative z-10 flex flex-col justify-center items-center text-center text-white px-8 w-full">
+        <div className="relative z-10 flex flex-col justify-center items-center text-center text-white px-8">
           {/* Brand Logo */}
           <div className="absolute top-8 left-8 flex items-center gap-3">
             <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -98,6 +148,13 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
               </p>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <div className="relative">
@@ -109,6 +166,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                     placeholder="Email"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -124,6 +182,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                       className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                       placeholder="Password"
                       required
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -135,6 +194,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     <input
                       type="checkbox"
                       className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      disabled={isLoading}
                     />
                     <span className="ml-2 text-sm text-gray-600">Remember me</span>
                   </label>
@@ -142,6 +202,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     type="button"
                     onClick={handleForgotPassword}
                     className="text-sm text-green-600 hover:text-green-800 font-medium transition-colors"
+                    disabled={isLoading}
                   >
                     Forgot password?
                   </button>
@@ -150,9 +211,15 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
 
               <button
                 type="submit"
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-full font-medium transition-colors duration-200 flex items-center justify-center gap-2"
+                disabled={isLoading}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-3 px-4 rounded-full font-medium transition-colors duration-200 flex items-center justify-center gap-2"
               >
-                {isLogin ? (
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Signing In...
+                  </>
+                ) : isLogin ? (
                   <>
                     SIGN IN
                     <ArrowRight className="w-4 h-4" />
@@ -168,6 +235,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                 <button
                   onClick={handleBackToLogin}
                   className="text-green-600 hover:text-green-800 text-sm font-medium transition-colors flex items-center gap-1 mx-auto"
+                  disabled={isLoading}
                 >
                   <ArrowLeft className="w-4 h-4" />
                   Back to login
