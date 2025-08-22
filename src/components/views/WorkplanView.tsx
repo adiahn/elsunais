@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
-import { Plus, Calendar, MapPin, Users, Clock, Search, Eye, DollarSign, Building, ArrowLeft, Activity, FileText, MessageSquare, Settings, Edit, Download } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, Clock, Search, Eye, DollarSign, Building, ArrowLeft, Activity, FileText, MessageSquare, Settings, Edit, Download, ChevronDown, ChevronRight } from 'lucide-react';
 
-interface Workplan {
+interface WorkplanComponent {
   id: string;
-  component: string;
-  duration: string;
+  componentId: string; // A1, A2, A3, etc.
   expectedStartDate: string;
   expectedEndDate: string;
-  sourceOfFunding: string;
+  idaFunding: number;
+  gcfFunding: number;
   leadImplementation: string;
   partners: string;
   procurementMethod: string;
+}
+
+interface Workplan {
+  id: string;
+  name: string;
+  components: WorkplanComponent[];
 }
 
 interface ActivityLog {
@@ -26,63 +32,105 @@ const WorkplanView: React.FC = () => {
   const [workplans, setWorkplans] = useState<Workplan[]>([
     {
       id: '1',
-      component: 'Infrastructure Development',
-      duration: '6 months',
-      expectedStartDate: '2025-02-01',
-      expectedEndDate: '2025-08-01',
-      sourceOfFunding: 'Government Grant',
-      leadImplementation: 'Engineering Team',
-      partners: 'Local Construction Co.',
-      procurementMethod: 'Open Tender'
+      name: 'Water Conservation Project',
+      components: [
+        {
+          id: '1-1',
+          componentId: 'A1',
+          expectedStartDate: '2025-02-01',
+          expectedEndDate: '2025-08-01',
+          idaFunding: 500000,
+          gcfFunding: 200000,
+          leadImplementation: 'Engineering Team',
+          partners: 'Local Construction Co.',
+          procurementMethod: 'Open Tender'
+        },
+        {
+          id: '1-2',
+          componentId: 'A2',
+          expectedStartDate: '2025-03-01',
+          expectedEndDate: '2025-09-01',
+          idaFunding: 300000,
+          gcfFunding: 0,
+          leadImplementation: 'Environmental Team',
+          partners: 'Green Solutions Ltd.',
+          procurementMethod: 'Restricted Tender'
+        },
+        {
+          id: '1-3',
+          componentId: 'A3',
+          expectedStartDate: '2025-04-01',
+          expectedEndDate: '2025-10-01',
+          idaFunding: 0,
+          gcfFunding: 400000,
+          leadImplementation: 'Community Team',
+          partners: 'Local NGOs',
+          procurementMethod: 'Direct Procurement'
+        }
+      ]
     },
     {
       id: '2',
-      component: 'Capacity Building',
-      duration: '12 months',
-      expectedStartDate: '2025-01-15',
-      expectedEndDate: '2026-01-15',
-      sourceOfFunding: 'Private Donor',
-      leadImplementation: 'Training Department',
-      partners: 'Training Institute',
-      procurementMethod: 'Direct Procurement'
+      name: 'Capacity Building Initiative',
+      components: [
+        {
+          id: '2-1',
+          componentId: 'B1',
+          expectedStartDate: '2025-01-15',
+          expectedEndDate: '2026-01-15',
+          idaFunding: 0,
+          gcfFunding: 300000,
+          leadImplementation: 'Training Department',
+          partners: 'Training Institute',
+          procurementMethod: 'Direct Procurement'
+        },
+        {
+          id: '2-2',
+          componentId: 'B2',
+          expectedStartDate: '2025-02-15',
+          expectedEndDate: '2026-02-15',
+          idaFunding: 250000,
+          gcfFunding: 150000,
+          leadImplementation: 'HR Department',
+          partners: 'HR Consultants',
+          procurementMethod: 'Framework Agreement'
+        }
+      ]
     },
     {
       id: '3',
-      component: 'Technology Solutions',
-      duration: '9 months',
-      expectedStartDate: '2025-03-01',
-      expectedEndDate: '2025-12-01',
-      sourceOfFunding: 'International Fund',
-      leadImplementation: 'IT Department',
-      partners: 'Tech Solutions Ltd.',
-      procurementMethod: 'Restricted Tender'
+      name: 'Technology Infrastructure',
+      components: [
+        {
+          id: '3-1',
+          componentId: 'C1',
+          expectedStartDate: '2025-03-01',
+          expectedEndDate: '2025-12-01',
+          idaFunding: 750000,
+          gcfFunding: 0,
+          leadImplementation: 'IT Department',
+          partners: 'Tech Solutions Ltd.',
+          procurementMethod: 'Restricted Tender'
+        }
+      ]
     }
   ]);
   
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedWorkplan, setSelectedWorkplan] = useState<Workplan | null>(null);
+  const [selectedComponent, setSelectedComponent] = useState<WorkplanComponent | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'documents' | 'settings'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedWorkplans, setExpandedWorkplans] = useState<Set<string>>(new Set());
   const [newWorkplan, setNewWorkplan] = useState<Omit<Workplan, 'id'>>({
-    component: '',
-    duration: '',
-    expectedStartDate: '',
-    expectedEndDate: '',
-    sourceOfFunding: '',
-    leadImplementation: '',
-    partners: '',
-    procurementMethod: ''
+    name: '',
+    components: []
   });
 
-  const componentOptions = [
-    'Infrastructure Development',
-    'Capacity Building',
-    'Technology Solutions',
-    'Research & Development',
-    'Community Outreach',
-    'Environmental Protection',
-    'Health & Safety',
-    'Education & Training'
+  const componentIdOptions = [
+    'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10',
+    'B1', 'B2', 'B3', 'B4', 'B5',
+    'C1', 'C2', 'C3', 'C4', 'C5'
   ];
 
   const procurementMethods = [
@@ -137,25 +185,31 @@ const WorkplanView: React.FC = () => {
     };
     setWorkplans([...workplans, workplan]);
     setNewWorkplan({
-      component: '',
-      duration: '',
-      expectedStartDate: '',
-      expectedEndDate: '',
-      sourceOfFunding: '',
-      leadImplementation: '',
-      partners: '',
-      procurementMethod: ''
+      name: '',
+      components: []
     });
     setShowCreateForm(false);
   };
 
-  const handleViewDetails = (workplan: Workplan) => {
+  const handleViewDetails = (workplan: Workplan, component?: WorkplanComponent) => {
     setSelectedWorkplan(workplan);
+    setSelectedComponent(component || null);
     setActiveTab('overview');
   };
 
   const handleBackToList = () => {
     setSelectedWorkplan(null);
+    setSelectedComponent(null);
+  };
+
+  const toggleWorkplanExpansion = (workplanId: string) => {
+    const newExpanded = new Set(expandedWorkplans);
+    if (newExpanded.has(workplanId)) {
+      newExpanded.delete(workplanId);
+    } else {
+      newExpanded.add(workplanId);
+    }
+    setExpandedWorkplans(newExpanded);
   };
 
   const getActivityIcon = (type: string) => {
@@ -173,13 +227,38 @@ const WorkplanView: React.FC = () => {
     }
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const getTotalFunding = (ida: number, gcf: number) => {
+    return ida + gcf;
+  };
+
+  const getWorkplanTotalFunding = (workplan: Workplan) => {
+    return workplan.components.reduce((total, component) => {
+      return total + getTotalFunding(component.idaFunding, component.gcfFunding);
+    }, 0);
+  };
+
   const filteredWorkplans = workplans.filter(workplan =>
-    workplan.component.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    workplan.leadImplementation.toLowerCase().includes(searchTerm.toLowerCase())
+    workplan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    workplan.components.some(comp => 
+      comp.componentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      comp.leadImplementation.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
-  // Show workplan details view
+  // Show workplan/component details view
   if (selectedWorkplan) {
+    const displayData = selectedComponent || selectedWorkplan;
+    const isComponentView = selectedComponent !== null;
+
     return (
       <div className="p-8">
         {/* Header */}
@@ -192,16 +271,20 @@ const WorkplanView: React.FC = () => {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-800">{selectedWorkplan.component}</h1>
-              <p className="text-gray-600">Workplan Details</p>
+              <h1 className="text-2xl font-semibold text-gray-800">
+                {isComponentView ? `${selectedWorkplan.name} - ${selectedComponent.componentId}` : selectedWorkplan.name}
+              </h1>
+              <p className="text-gray-600">
+                {isComponentView ? 'Component Details' : 'Workplan Overview'}
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+            <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 min-w-[100px] justify-center">
               <Edit className="w-4 h-4" />
               Edit
             </button>
-            <button className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+            <button className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 min-w-[100px] justify-center">
               <Download className="w-4 h-4" />
               Export
             </button>
@@ -236,73 +319,153 @@ const WorkplanView: React.FC = () => {
         {/* Main Content */}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Workplan Details */}
+            {/* Workplan/Component Details */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-6">Workplan Information</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-6">
+                  {isComponentView ? 'Component Information' : 'Workplan Information'}
+                </h2>
+                
+                {isComponentView ? (
+                  // Component Details
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Component ID</h3>
+                        <p className="text-lg font-semibold text-gray-800 flex items-center">
+                          <Building className="w-5 h-5 mr-2 text-blue-600" />
+                          {selectedComponent.componentId}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Expected Start Date</h3>
+                        <p className="text-lg text-gray-800 flex items-center">
+                          <Calendar className="w-5 h-5 mr-2 text-green-600" />
+                          {selectedComponent.expectedStartDate}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Expected End Date</h3>
+                        <p className="text-lg text-gray-800 flex items-center">
+                          <Calendar className="w-5 h-5 mr-2 text-green-600" />
+                          {selectedComponent.expectedEndDate}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">IDA</h3>
+                        <p className={`text-lg font-semibold flex items-center ${
+                          selectedComponent.idaFunding > 0 ? 'text-green-600' : 'text-gray-400'
+                        }`}>
+                          <DollarSign className="w-5 h-5 mr-2" />
+                          {formatCurrency(selectedComponent.idaFunding)}
+                          {selectedComponent.idaFunding === 0 && <span className="text-sm font-normal ml-2">(No contribution)</span>}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">GCF</h3>
+                        <p className={`text-lg font-semibold flex items-center ${
+                          selectedComponent.gcfFunding > 0 ? 'text-blue-600' : 'text-gray-400'
+                        }`}>
+                          <DollarSign className="w-5 h-5 mr-2" />
+                          {formatCurrency(selectedComponent.gcfFunding)}
+                          {selectedComponent.gcfFunding === 0 && <span className="text-sm font-normal ml-2">(No contribution)</span>}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Total Funding</h3>
+                        <p className="text-lg font-bold text-gray-800 flex items-center">
+                          <DollarSign className="w-5 h-5 mr-2 text-purple-600" />
+                          {formatCurrency(getTotalFunding(selectedComponent.idaFunding, selectedComponent.gcfFunding))}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Lead Implementation</h3>
+                        <p className="text-lg text-gray-800 flex items-center">
+                          <Users className="w-5 h-5 mr-2 text-purple-600" />
+                          {selectedComponent.leadImplementation}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Partners</h3>
+                        <p className="text-lg text-gray-800 flex items-center">
+                          <Building className="w-5 h-5 mr-2 text-orange-600" />
+                          {selectedComponent.partners}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Procurement Method</h3>
+                        <p className="text-lg text-gray-800">{selectedComponent.procurementMethod}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Workplan Overview
+                  <div className="space-y-6">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Component</h3>
-                      <p className="text-lg font-semibold text-gray-800">{selectedWorkplan.component}</p>
+                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Project Name</h3>
+                      <p className="text-lg font-semibold text-gray-800">{selectedWorkplan.name}</p>
                     </div>
                     
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Duration</h3>
-                      <p className="text-lg text-gray-800 flex items-center">
-                        <Clock className="w-5 h-5 mr-2 text-green-600" />
-                        {selectedWorkplan.duration}
-                      </p>
+                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Components</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {selectedWorkplan.components.map((component) => (
+                          <div key={component.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-semibold text-gray-800 flex items-center">
+                                <Building className="w-4 h-4 mr-2 text-blue-600" />
+                                {component.componentId}
+                              </h4>
+                              <button
+                                onClick={() => handleViewDetails(selectedWorkplan, component)}
+                                className="text-green-600 hover:text-green-700 text-sm font-medium"
+                              >
+                                View Details →
+                              </button>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">IDA:</span>
+                                <span className={`font-medium ${component.idaFunding > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                  {formatCurrency(component.idaFunding)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">GCF:</span>
+                                <span className={`font-medium ${component.gcfFunding > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                                  {formatCurrency(component.gcfFunding)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-t pt-2">
+                                <span className="text-gray-800 font-medium">Total:</span>
+                                <span className="font-bold text-gray-800">
+                                  {formatCurrency(getTotalFunding(component.idaFunding, component.gcfFunding))}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Expected Start Date</h3>
-                      <p className="text-lg text-gray-800 flex items-center">
-                        <Calendar className="w-5 h-5 mr-2 text-blue-600" />
-                        {selectedWorkplan.expectedStartDate}
-                      </p>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Expected End Date</h3>
-                      <p className="text-lg text-gray-800 flex items-center">
-                        <Calendar className="w-5 h-5 mr-2 text-blue-600" />
-                        {selectedWorkplan.expectedEndDate}
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                      <h3 className="text-sm font-medium text-green-800 uppercase tracking-wider mb-2">Total Workplan Funding</h3>
+                      <p className="text-xl font-bold text-green-800">
+                        {formatCurrency(getWorkplanTotalFunding(selectedWorkplan))}
                       </p>
                     </div>
                   </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Source of Funding</h3>
-                      <p className="text-lg text-gray-800 flex items-center">
-                        <DollarSign className="w-5 h-5 mr-2 text-green-600" />
-                        {selectedWorkplan.sourceOfFunding}
-                      </p>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Lead Implementation</h3>
-                      <p className="text-lg text-gray-800 flex items-center">
-                        <Users className="w-5 h-5 mr-2 text-purple-600" />
-                        {selectedWorkplan.leadImplementation}
-                      </p>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Partners</h3>
-                      <p className="text-lg text-gray-800 flex items-center">
-                        <Building className="w-5 h-5 mr-2 text-orange-600" />
-                        {selectedWorkplan.partners}
-                      </p>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Procurement Method</h3>
-                      <p className="text-lg text-gray-800">{selectedWorkplan.procurementMethod}</p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -393,7 +556,7 @@ const WorkplanView: React.FC = () => {
         </div>
         <button
           onClick={() => setShowCreateForm(true)}
-          className="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200 flex items-center gap-2"
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200 flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
           Create New Workplan
@@ -406,7 +569,7 @@ const WorkplanView: React.FC = () => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search workplans..."
+            placeholder="Search workplans by name, component ID, or lead..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70 backdrop-blur-sm"
@@ -417,72 +580,170 @@ const WorkplanView: React.FC = () => {
       {/* Workplans Table */}
       <div className="bg-white/50 backdrop-blur-sm rounded-md border border-white/20 shadow-md overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px]">
+          <table className="w-full min-w-[900px]">
             <thead className="bg-gray-50/80">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Component
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Project Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Duration
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Component ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Source of Funding
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  IDA
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  GCF
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Funding
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Lead Implementation
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Partners
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Procurement Method
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredWorkplans.map((workplan) => (
-                <tr key={workplan.id} className="hover:bg-white/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{workplan.component}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">{workplan.duration}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <DollarSign className="w-4 h-4 mr-1" />
-                      {workplan.sourceOfFunding}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Users className="w-4 h-4 mr-1" />
-                      {workplan.leadImplementation}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Building className="w-4 h-4 mr-1" />
-                      {workplan.partners}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">{workplan.procurementMethod}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => handleViewDetails(workplan)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-1"
-                    >
-                      <Eye className="w-4 h-4" />
-                      View Details
-                    </button>
-                  </td>
-                </tr>
+                <React.Fragment key={workplan.id}>
+                  {/* Workplan Header Row */}
+                  <tr className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => toggleWorkplanExpansion(workplan.id)}
+                          className="mr-3 p-1 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          {expandedWorkplans.has(workplan.id) ? (
+                            <ChevronDown className="w-4 h-4 text-gray-600" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-gray-600" />
+                          )}
+                        </button>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{workplan.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {workplan.components.length} component{workplan.components.length !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-600">
+                        {workplan.components.map(comp => comp.componentId).join(', ')}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-green-600">
+                        {formatCurrency(workplan.components.reduce((sum, comp) => sum + comp.idaFunding, 0))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-blue-600">
+                        {formatCurrency(workplan.components.reduce((sum, comp) => sum + comp.gcfFunding, 0))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-bold text-gray-800">
+                        {formatCurrency(getWorkplanTotalFunding(workplan))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-600">
+                        Multiple teams
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-600">
+                        Multiple partners
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-600">
+                        Various methods
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => handleViewDetails(workplan)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                      </button>
+                    </td>
+                  </tr>
+                  
+                  {/* Component Rows (when expanded) */}
+                  {expandedWorkplans.has(workplan.id) && workplan.components.map((component) => (
+                    <tr key={component.id} className="bg-white/30 hover:bg-white/50 transition-colors">
+                      <td className="px-6 py-3">
+                        <div className="flex items-center pl-12">
+                          <div className="text-sm text-gray-600">
+                            Component {component.componentId}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="text-sm text-gray-600 bg-blue-100 text-blue-800 px-2 py-1 rounded-md font-medium">
+                          {component.componentId}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className={`text-sm font-medium ${
+                          component.idaFunding > 0 ? 'text-green-600' : 'text-gray-400'
+                        }`}>
+                          {formatCurrency(component.idaFunding)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className={`text-sm font-medium ${
+                          component.gcfFunding > 0 ? 'text-blue-600' : 'text-gray-400'
+                        }`}>
+                          {formatCurrency(component.gcfFunding)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="text-sm font-bold text-gray-800">
+                          {formatCurrency(getTotalFunding(component.idaFunding, component.gcfFunding))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Users className="w-4 h-4 mr-1" />
+                          {component.leadImplementation}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Building className="w-4 h-4 mr-1" />
+                          {component.partners}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="text-sm text-gray-600">{component.procurementMethod}</div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <button
+                          onClick={() => handleViewDetails(workplan, component)}
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
@@ -505,121 +766,22 @@ const WorkplanView: React.FC = () => {
               </div>
 
               <form onSubmit={handleCreateWorkplan} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Component
-                    </label>
-                    <select
-                      value={newWorkplan.component}
-                      onChange={(e) => setNewWorkplan({ ...newWorkplan, component: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
-                      required
-                    >
-                      <option value="">Select Component</option>
-                      {componentOptions.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Duration
-                    </label>
-                    <input
-                      type="text"
-                      value={newWorkplan.duration}
-                      onChange={(e) => setNewWorkplan({ ...newWorkplan, duration: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
-                      placeholder="e.g., 6 months"
-                      required
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Project Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newWorkplan.name}
+                    onChange={(e) => setNewWorkplan({ ...newWorkplan, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
+                    placeholder="Enter project name"
+                    required
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Expected Start Date
-                    </label>
-                    <input
-                      type="date"
-                      value={newWorkplan.expectedStartDate}
-                      onChange={(e) => setNewWorkplan({ ...newWorkplan, expectedStartDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Expected End Date
-                    </label>
-                    <input
-                      type="date"
-                      value={newWorkplan.expectedEndDate}
-                      onChange={(e) => setNewWorkplan({ ...newWorkplan, expectedEndDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Source of Funding
-                    </label>
-                    <input
-                      type="text"
-                      value={newWorkplan.sourceOfFunding}
-                      onChange={(e) => setNewWorkplan({ ...newWorkplan, sourceOfFunding: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Lead Implementation
-                    </label>
-                    <input
-                      type="text"
-                      value={newWorkplan.leadImplementation}
-                      onChange={(e) => setNewWorkplan({ ...newWorkplan, leadImplementation: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Partners
-                    </label>
-                    <input
-                      type="text"
-                      value={newWorkplan.partners}
-                      onChange={(e) => setNewWorkplan({ ...newWorkplan, partners: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Procurement Method
-                    </label>
-                    <select
-                      value={newWorkplan.procurementMethod}
-                      onChange={(e) => setNewWorkplan({ ...newWorkplan, procurementMethod: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/70"
-                      required
-                    >
-                      <option value="">Select Procurement Method</option>
-                      {procurementMethods.map((method) => (
-                        <option key={method} value={method}>{method}</option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Component management will be available after creating the workplan.</p>
                 </div>
 
                 <div className="flex justify-end space-x-3 mt-6">
@@ -632,7 +794,7 @@ const WorkplanView: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-md font-medium transition-colors"
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium transition-colors"
                   >
                     Create Workplan
                   </button>
