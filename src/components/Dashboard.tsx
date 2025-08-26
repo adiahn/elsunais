@@ -13,7 +13,6 @@ export type ViewType = 'dashboard' | 'workplan' | 'settings' | 'user-management'
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
-
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
