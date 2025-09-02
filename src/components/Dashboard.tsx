@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import DashboardView from './views/DashboardView';
 import WorkplanView from './views/WorkplanView';
+import DriversView from './views/DriversView';
 import SettingsView from './views/SettingsView';
 import UserManagementView from './views/UserManagementView';
 
@@ -9,7 +10,7 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-export type ViewType = 'dashboard' | 'workplan' | 'settings' | 'user-management';
+export type ViewType = 'dashboard' | 'workplan' | 'drivers' | 'settings' | 'user-management';
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
@@ -19,6 +20,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <DashboardView />;
       case 'workplan':
         return <WorkplanView />;
+      case 'drivers':
+        return <DriversView />;
       case 'settings':
         return <SettingsView />;
       case 'user-management':

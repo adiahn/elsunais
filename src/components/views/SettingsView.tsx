@@ -1,6 +1,14 @@
 import React from 'react';
 import { Settings, User, Bell, Shield, Database, Globe } from 'lucide-react';
 
+const NewComponent = [
+  {
+    "id" : "A",
+    
+
+  }
+]
+
 const SettingsView: React.FC = () => {
   const settingsSections = [
     {

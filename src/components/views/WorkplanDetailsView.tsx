@@ -9,7 +9,7 @@ import {
   Building, 
   Activity, 
   FileText, 
-  MessageSquare, 
+  MessageSquare,  
   Settings,
   Eye,
   Edit,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, MapPin, Users, Clock, Search, Eye, DollarSign, Building, ArrowLeft, Activity, FileText, MessageSquare, Settings, Edit, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Calendar, Users, Search, Eye, DollarSign, Building, ArrowLeft, Activity, FileText, MessageSquare, Settings, Edit, Download, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface Activity {
   id: string;
@@ -13,6 +13,7 @@ interface Project {
   id: string;
   name: string;
   projectId: string; // A1, A2, A3, etc.
+  fileNo: string;
   expectedStartDate: string;
   expectedEndDate: string;
   idaFunding: number;
@@ -40,6 +41,8 @@ interface ActivityLog {
   type: 'update' | 'comment' | 'status_change' | 'file_upload';
 }
 
+
+
 const WorkplanView: React.FC = () => {
   const [components, setComponents] = useState<Component[]>([
     {
@@ -51,6 +54,7 @@ const WorkplanView: React.FC = () => {
           id: '1-1',
           name: 'Area Supervision',
           projectId: 'A1',
+          fileNo: 'ACRESAL-001',
           expectedStartDate: '2025-02-01',
           expectedEndDate: '2025-08-01',
           idaFunding: 500000,
@@ -80,6 +84,7 @@ const WorkplanView: React.FC = () => {
           id: '1-2',
           name: 'Drainage Construction',
           projectId: 'A2',
+          fileNo: 'ACRESAL-002',
           expectedStartDate: '2025-03-01',
           expectedEndDate: '2025-09-01',
           idaFunding: 300000,
@@ -110,6 +115,7 @@ const WorkplanView: React.FC = () => {
           partners: 'Local NGOs',
           procurementMethod: 'Direct Procurement',
           status: 'completed',
+          fileNo: 'ACRESAL-003',
           activities: [
             {
               id: '1-3-1',
@@ -139,6 +145,7 @@ const WorkplanView: React.FC = () => {
           partners: 'Training Institute',
           procurementMethod: 'Direct Procurement',
           status: 'in_progress',
+          fileNo: 'ACRESAL-004',
           activities: []
         },
         {
@@ -153,6 +160,7 @@ const WorkplanView: React.FC = () => {
           partners: 'HR Consultants',
           procurementMethod: 'Framework Agreement',
           status: 'completed',
+          fileNo: 'ACRESAL-005',
           activities: []
         }
       ]
@@ -174,6 +182,7 @@ const WorkplanView: React.FC = () => {
           partners: 'Tech Solutions Ltd.',
           procurementMethod: 'Restricted Tender',
           status: 'in_progress',
+          fileNo: 'ACRESAL-006',
           activities: []
         }
       ]
@@ -195,6 +204,7 @@ const WorkplanView: React.FC = () => {
           partners: 'Tech Solutions Ltd.',
           procurementMethod: 'Restricted Tender',
           status: 'in_progress',
+          fileNo: 'ACRESAL-007',
           activities: []
         }
       ]
@@ -218,6 +228,7 @@ const WorkplanView: React.FC = () => {
   const [newProject, setNewProject] = useState<Omit<Project, 'id'>>({
     name: '',
     projectId: '',
+    fileNo: '',
     expectedStartDate: '',
     expectedEndDate: '',
     idaFunding: 0,
@@ -234,6 +245,8 @@ const WorkplanView: React.FC = () => {
     description: '',
     status: 'pending'
   });
+
+
 
   // Debug modal states
   useEffect(() => {
@@ -323,7 +336,8 @@ const WorkplanView: React.FC = () => {
     
     const project: Project = {
       ...newProject,
-      id: Date.now().toString()
+      id: Date.now().toString(),
+      fileNo: newProject.fileNo || ''
     };
     
     const updatedComponent = {
@@ -461,9 +475,12 @@ const WorkplanView: React.FC = () => {
     }
   };
 
+
+
+
+
   // Show component/project details view
   if (selectedComponent) {
-    const displayData = selectedProject || selectedComponent;
     const isProjectView = selectedProject !== null;
 
     return (
@@ -504,7 +521,7 @@ const WorkplanView: React.FC = () => {
             <nav className="flex space-x-8">
               {[
                 { id: 'overview', label: 'Overview', icon: Eye },
-                { id: 'activities', label: 'Activities', icon: Activity },
+                ...(isProjectView ? [{ id: 'activities', label: 'Activities', icon: Activity }] : []),
                 { id: 'documents', label: 'Documents', icon: FileText },
                 { id: 'settings', label: 'Settings', icon: Settings }
               ].map((tab) => (
@@ -762,24 +779,26 @@ const WorkplanView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Recent Activities */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activities</h3>
-                  <div className="space-y-4">
-                    {mockActivities.slice(0, 3).map((activity) => (
-                      <div key={activity.id} className="flex items-start space-x-3">
-                        <div className="flex-shrink-0 mt-1">
-                          {getActivityIcon(activity.type)}
+                {/* Recent Activities - Only show for projects */}
+                {isProjectView && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activities</h3>
+                    <div className="space-y-4">
+                      {mockActivities.slice(0, 3).map((activity) => (
+                        <div key={activity.id} className="flex items-start space-x-3">
+                          <div className="flex-shrink-0 mt-1">
+                            {getActivityIcon(activity.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">{activity.action}</p>
+                            <p className="text-sm text-gray-500">{activity.user}</p>
+                            <p className="text-xs text-gray-400">{activity.timestamp}</p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{activity.action}</p>
-                          <p className="text-sm text-gray-500">{activity.user}</p>
-                          <p className="text-xs text-gray-400">{activity.timestamp}</p>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -860,6 +879,19 @@ const WorkplanView: React.FC = () => {
                       value={newProject.name}
                       onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      File No
+                    </label>
+                    <input
+                      type="text"
+                      value={newProject.fileNo}
+                      onChange={(e) => setNewProject({ ...newProject, fileNo: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="Enter file number"
                       required
                     />
                   </div>
@@ -1340,6 +1372,19 @@ const WorkplanView: React.FC = () => {
                     value={newProject.name}
                     onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    File No
+                  </label>
+                  <input
+                    type="text"
+                    value={newProject.fileNo}
+                    onChange={(e) => setNewProject({ ...newProject, fileNo: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Enter file number"
                     required
                   />
                 </div>
