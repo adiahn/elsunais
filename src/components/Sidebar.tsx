@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calendar, Settings, Users, LogOut, Users as UsersIcon, Bell, Car, Calculator } from 'lucide-react';
+import { LayoutDashboard, Calendar, Settings, Users, LogOut, Users as UsersIcon, Car, Calculator, Wrench } from 'lucide-react';
 import { ViewType } from './Dashboard';
 
 interface SidebarProps {
@@ -14,6 +14,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout }
     { id: 'workplan' as ViewType, icon: Calendar, label: 'Workplan', badge: '3' },
     { id: 'drivers' as ViewType, icon: Car, label: 'Drivers', badge: '5' },
     { id: 'accountant' as ViewType, icon: Calculator, label: 'Accountant', badge: '2' },
+    { id: 'maintenance' as ViewType, icon: Wrench, label: 'Maintenance', badge: '4' },
     { id: 'settings' as ViewType, icon: Settings, label: 'Settings', badge: null },
     { id: 'user-management' as ViewType, icon: Users, label: 'User Management', badge: '12' },
   ];
@@ -33,17 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout }
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="p-4 border-b border-green-700/50">
-        <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-green-200">Active Projects</span>
-            <Bell className="w-4 h-4 text-green-300" />
-          </div>
-          <div className="text-2xl font-bold">23</div>
-          <div className="text-xs text-green-300">+2 this week</div>
-        </div>
-      </div>
+
 
       {/* Navigation Menu */}
       <nav className="flex-1 py-6">
