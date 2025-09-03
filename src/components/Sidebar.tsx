@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calendar, Settings, Users, LogOut, Users as UsersIcon, Car, Calculator, Wrench } from 'lucide-react';
+import { LayoutDashboard, Calendar, Settings, Users, LogOut, Users as UsersIcon, Car, Calculator, Wrench, Package } from 'lucide-react';
 import { ViewType } from './Dashboard';
 
 interface SidebarProps {
@@ -15,6 +15,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onLogout }
     { id: 'drivers' as ViewType, icon: Car, label: 'Drivers', badge: '5' },
     { id: 'accountant' as ViewType, icon: Calculator, label: 'Accountant', badge: '2' },
     { id: 'maintenance' as ViewType, icon: Wrench, label: 'Maintenance', badge: '4' },
+    { id: 'store-manager' as ViewType, icon: Package, label: 'Store Manager', badge: '1' },
     { id: 'settings' as ViewType, icon: Settings, label: 'Settings', badge: null },
     { id: 'user-management' as ViewType, icon: Users, label: 'User Management', badge: '12' },
   ];

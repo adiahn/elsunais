@@ -30,7 +30,7 @@ const MaintenanceView: React.FC = () => {
       priority: 'medium',
       status: 'pending',
       requestDate: '2025-01-20',
-      requestedBy: 'Sarah Johnson',
+      requestedBy: 'Aisha Ibrahim',
       department: 'Administration',
       vendor: 'Office Depot'
     },
@@ -44,7 +44,7 @@ const MaintenanceView: React.FC = () => {
       status: 'approved',
       requestDate: '2025-01-18',
       approvedDate: '2025-01-19',
-      requestedBy: 'Mike Chen',
+      requestedBy: 'Yusuf Abdullahi',
       department: 'Facilities',
       vendor: 'Cool Air Services'
     },
@@ -58,7 +58,7 @@ const MaintenanceView: React.FC = () => {
       status: 'processing',
       requestDate: '2025-01-15',
       approvedDate: '2025-01-16',
-      requestedBy: 'IT Department',
+      requestedBy: 'Ibrahim Sani',
       department: 'IT',
       vendor: 'Internet Provider Co.'
     },
@@ -73,7 +73,7 @@ const MaintenanceView: React.FC = () => {
       requestDate: '2025-01-10',
       approvedDate: '2025-01-12',
       paymentDate: '2025-01-15',
-      requestedBy: 'Facilities Manager',
+      requestedBy: 'Aminu Garba',
       department: 'Facilities',
       vendor: 'Clean Pro Services',
       receipt: 'receipt_004.pdf'

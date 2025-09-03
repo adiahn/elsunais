@@ -48,10 +48,10 @@ const DriversView: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>([
     {
       id: '1',
-      name: 'John Smith',
+      name: 'Yusuf Abdullahi',
       employeeId: 'EMP001',
-      phone: '+1-555-0101',
-      email: 'john.smith@company.com',
+      phone: '+234-801-234-5678',
+      email: 'yusuf.abdullahi@company.com',
       licenseNumber: 'DL123456789',
       licenseExpiry: '2025-12-31',
       assignedVehicle: '1',
@@ -59,10 +59,10 @@ const DriversView: React.FC = () => {
     },
     {
       id: '2',
-      name: 'Sarah Johnson',
+      name: 'Aisha Ibrahim',
       employeeId: 'EMP002',
-      phone: '+1-555-0102',
-      email: 'sarah.johnson@company.com',
+      phone: '+234-802-345-6789',
+      email: 'aisha.ibrahim@company.com',
       licenseNumber: 'DL987654321',
       licenseExpiry: '2026-06-15',
       assignedVehicle: '2',
@@ -70,10 +70,10 @@ const DriversView: React.FC = () => {
     },
     {
       id: '3',
-      name: 'Mike Wilson',
+      name: 'Ibrahim Sani',
       employeeId: 'EMP003',
-      phone: '+1-555-0103',
-      email: 'mike.wilson@company.com',
+      phone: '+234-803-456-7890',
+      email: 'ibrahim.sani@company.com',
       licenseNumber: 'DL456789123',
       licenseExpiry: '2025-09-20',
       isActive: true

@@ -72,7 +72,7 @@ const AccountantView: React.FC = () => {
       title: 'Vehicle Fueling',
       description: 'Fuel tank refill for Toyota Camry',
       amount: 125,
-      recipient: 'John Smith',
+      recipient: 'Yusuf Abdullahi',
       recipientType: 'internal',
       requestDate: '2025-01-19',
       approvedDate: '2025-01-20'
@@ -84,7 +84,7 @@ const AccountantView: React.FC = () => {
       title: 'Stakeholder Meetings',
       description: 'Community engagement activities',
       amount: 5000,
-      recipient: 'Community Team',
+      recipient: 'Aisha Ibrahim',
       recipientType: 'internal',
       requestDate: '2025-01-16',
       approvedDate: '2025-01-17',
@@ -118,7 +118,7 @@ const AccountantView: React.FC = () => {
       requestDate: '2025-01-10',
       approvedDate: '2025-01-12',
       paymentDate: '2025-01-15',
-      recipient: 'John Smith',
+      recipient: 'Yusuf Abdullahi',
       recipientType: 'internal',
       paymentMethod: 'full',
       receipt: 'receipt_001.pdf'
