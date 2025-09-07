@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, Building, Wrench, Settings, Users, Phone, Mail, Calendar } from 'lucide-react';
+import { Plus, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, Building, Wrench, Settings, Users, Phone, Mail, Calendar, X } from 'lucide-react';
 
 interface MaintenanceRequest {
   id: string;
@@ -295,154 +295,246 @@ const MaintenanceView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Requests List */}
-        <div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">All Requests</h2>
-            <div className="space-y-3">
+      {/* Maintenance Requests Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Maintenance Requests</h2>
+          <p className="text-sm text-gray-600 mt-1">Click on a request to view details and take actions</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Request</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requested By</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
               {requests.map((request) => (
-                <div
-                  key={request.id}
-                  onClick={() => setSelectedRequest(request)}
-                  className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                    selectedRequest?.id === request.id
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                <tr 
+                  key={request.id} 
+                  className={`hover:bg-gray-50 cursor-pointer transition-colors ${
+                    selectedRequest?.id === request.id ? 'bg-green-50' : ''
                   }`}
+                  onClick={() => setSelectedRequest(request)}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      {getCategoryIcon(request.category)}
-                      <span className="font-medium text-gray-900">{request.title}</span>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 mr-3">
+                        {getCategoryIcon(request.category)}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{request.title}</div>
+                        <div className="text-sm text-gray-500 truncate max-w-xs">{request.description}</div>
+                      </div>
                     </div>
-                    <span className="text-lg font-bold text-green-600">${request.amount.toLocaleString()}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">{request.description}</p>
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                    <span>{request.requestedBy} - {request.department}</span>
-                    <span>{request.requestDate}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{request.requestedBy}</div>
+                    <div className="text-sm text-gray-500">{request.department}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">${request.amount.toLocaleString()}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-900">{getCategoryLabel(request.category)}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(request.priority)}`}>
+                      {request.priority}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
+                      {request.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{request.requestDate}</div>
+                    {request.approvedDate && (
+                      <div className="text-sm text-gray-500">Approved: {request.approvedDate}</div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
-                        {request.status}
-                      </span>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(request.priority)}`}>
-                        {request.priority}
-                      </span>
+                      {request.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleApproveRequest(request.id);
+                            }}
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRejectRequest(request.id);
+                            }}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {request.status === 'approved' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkAsCompleted(request.id);
+                          }}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          Complete
+                        </button>
+                      )}
                     </div>
-                    <span className="text-xs text-gray-500">{getCategoryLabel(request.category)}</span>
-                  </div>
-                </div>
+                  </td>
+                </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Request Details Modal */}
+      {selectedRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Request Details</h3>
+              <button
+                onClick={() => setSelectedRequest(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">{selectedRequest.title}</h4>
+                <p className="text-sm text-gray-600">{selectedRequest.description}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                  <p className="text-lg font-bold text-green-600">${selectedRequest.amount.toLocaleString()}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <p className="text-sm text-gray-900">{getCategoryLabel(selectedRequest.category)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(selectedRequest.priority)}`}>
+                    {selectedRequest.priority}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedRequest.status)}`}>
+                    {selectedRequest.status}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Requested By</label>
+                  <p className="text-sm text-gray-900">{selectedRequest.requestedBy}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                  <p className="text-sm text-gray-900">{selectedRequest.department}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Request Date</label>
+                  <p className="text-sm text-gray-900">{selectedRequest.requestDate}</p>
+                </div>
+                {selectedRequest.approvedDate && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Approved Date</label>
+                    <p className="text-sm text-gray-900">{selectedRequest.approvedDate}</p>
+                  </div>
+                )}
+              </div>
+
+              {selectedRequest.vendor && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+                  <p className="text-sm text-gray-900">{selectedRequest.vendor}</p>
+                </div>
+              )}
+
+              {selectedRequest.notes && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <p className="text-sm text-gray-900">{selectedRequest.notes}</p>
+                </div>
+              )}
+
+              {selectedRequest.receipt && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Receipt</label>
+                  <a 
+                    href="#" 
+                    className="text-blue-600 hover:text-blue-800 text-sm underline"
+                  >
+                    {selectedRequest.receipt}
+                  </a>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-gray-200">
+                {selectedRequest.status === 'pending' && (
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => {
+                        handleApproveRequest(selectedRequest.id);
+                        setSelectedRequest(null);
+                      }}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleRejectRequest(selectedRequest.id);
+                        setSelectedRequest(null);
+                      }}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+                {selectedRequest.status === 'approved' && (
+                  <button
+                    onClick={() => {
+                      handleMarkAsCompleted(selectedRequest.id);
+                      setSelectedRequest(null);
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Mark as Completed
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Request Details */}
-        <div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Request Details</h2>
-            {selectedRequest ? (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-2">{selectedRequest.title}</h3>
-                  <p className="text-sm text-gray-600 mb-4">{selectedRequest.description}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                    <p className="text-lg font-bold text-green-600">${selectedRequest.amount.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <p className="text-sm text-gray-900">{getCategoryLabel(selectedRequest.category)}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(selectedRequest.priority)}`}>
-                      {selectedRequest.priority}
-                    </span>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedRequest.status)}`}>
-                      {selectedRequest.status}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Requested By</label>
-                    <p className="text-sm text-gray-900">{selectedRequest.requestedBy}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                    <p className="text-sm text-gray-900">{selectedRequest.department}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Request Date</label>
-                    <p className="text-sm text-gray-900">{selectedRequest.requestDate}</p>
-                  </div>
-                  {selectedRequest.approvedDate && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Approved Date</label>
-                      <p className="text-sm text-gray-900">{selectedRequest.approvedDate}</p>
-                    </div>
-                  )}
-                </div>
-
-                {selectedRequest.vendor && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
-                    <p className="text-sm text-gray-900">{selectedRequest.vendor}</p>
-                  </div>
-                )}
-
-                {selectedRequest.notes && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                    <p className="text-sm text-gray-900">{selectedRequest.notes}</p>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="pt-4 border-t border-gray-200">
-                  {selectedRequest.status === 'pending' && (
-                    <div className="flex space-x-3">
-                      <button
-                        onClick={() => handleApproveRequest(selectedRequest.id)}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleRejectRequest(selectedRequest.id)}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
-                  {selectedRequest.status === 'approved' && (
-                    <button
-                      onClick={() => handleMarkAsCompleted(selectedRequest.id)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      Mark as Completed
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">Select a request to view details</p>
-            )}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Create Request Modal */}
       {showCreateForm && (

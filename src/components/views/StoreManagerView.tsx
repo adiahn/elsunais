@@ -160,6 +160,7 @@ const StoreManagerView: React.FC = () => {
   const [selectedRequest, setSelectedRequest] = useState<ItemRequest | null>(null);
   const [handoverNotes, setHandoverNotes] = useState('');
   const [returnNotes, setReturnNotes] = useState('');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'requests'>('inventory');
 
   const getItemTypeIcon = (type: StoreItem['type']) => {
     switch (type) {
@@ -355,103 +356,46 @@ const StoreManagerView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Approved Requests (Ready for Handover) */}
-        <div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Ready for Handover</h2>
-            <div className="space-y-3">
-              {approvedRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="p-4 rounded-lg border border-gray-200"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      {getItemTypeIcon(request.itemType)}
-                      <span className="font-medium text-gray-900">{request.itemName}</span>
-                    </div>
-                    <span className="text-sm font-bold text-green-600">{request.quantity} {request.unit}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">{request.purpose}</p>
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
-                    <span>{request.requestedBy} - {request.department}</span>
-                    <span>{request.approvedDate}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
-                      {request.status}
-                    </span>
-                    <button
-                      onClick={() => handleHandover(request.id)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-xs font-medium transition-colors"
-                    >
-                      Hand Over
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {approvedRequests.length === 0 && (
-                <p className="text-gray-500 text-center py-8">No approved requests ready for handover</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Handed Over Items (Awaiting Return) */}
-        <div>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Awaiting Return</h2>
-            <div className="space-y-3">
-              {handedOverRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="p-4 rounded-lg border border-gray-200"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      {getItemTypeIcon(request.itemType)}
-                      <span className="font-medium text-gray-900">{request.itemName}</span>
-                    </div>
-                    <span className="text-sm font-bold text-blue-600">{request.quantity} {request.unit}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">{request.purpose}</p>
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                    <span>{request.requestedBy} - {request.department}</span>
-                    <span>Handed: {request.handoverDate}</span>
-                  </div>
-                  {request.expectedReturnDate && (
-                    <div className="text-xs text-gray-500 mb-3">
-                      Expected Return: {request.expectedReturnDate}
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
-                      {request.status}
-                    </span>
-                    {request.itemType === 'non_consumable' && (
-                      <button
-                        onClick={() => handleReturn(request.id)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-medium transition-colors"
-                      >
-                        Mark Returned
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {handedOverRequests.length === 0 && (
-                <p className="text-gray-500 text-center py-8">No items awaiting return</p>
-              )}
-            </div>
-          </div>
+      {/* Tab Navigation */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8 px-6">
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'inventory'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Package className="w-4 h-4" />
+                <span>All Inventory</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('requests')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'requests'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4" />
+                <span>All Item Requests</span>
+              </div>
+            </button>
+          </nav>
         </div>
       </div>
 
-      {/* Inventory Overview */}
-      <div className="mt-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Inventory Overview</h2>
+      {/* Tab Content */}
+      {activeTab === 'inventory' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Inventory Overview</h2>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -503,7 +447,113 @@ const StoreManagerView: React.FC = () => {
             </table>
           </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === 'requests' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">All Item Requests</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Details</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requested By</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {requests.map((request) => (
+                  <tr key={request.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        {getItemTypeIcon(request.itemType)}
+                        <div className="ml-3">
+                          <div className="text-sm font-medium text-gray-900">{request.itemName}</div>
+                          <div className="text-sm text-gray-500">ID: {request.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        request.itemType === 'consumable' 
+                          ? 'bg-orange-100 text-orange-800' 
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {getItemTypeLabel(request.itemType)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{request.quantity} {request.unit}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{request.requestedBy}</div>
+                      <div className="text-sm text-gray-500">{request.department}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900 max-w-xs truncate">{request.purpose}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
+                        {getStatusIcon(request.status)}
+                        <span className="ml-1">{request.status}</span>
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div>Requested: {request.requestDate}</div>
+                      {request.approvedDate && <div>Approved: {request.approvedDate}</div>}
+                      {request.handoverDate && <div>Handed: {request.handoverDate}</div>}
+                      {request.returnDate && <div>Returned: {request.returnDate}</div>}
+                      {request.expectedReturnDate && (
+                        <div className="text-blue-600">Expected: {request.expectedReturnDate}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2">
+                        {request.status === 'approved' && (
+                          <button
+                            onClick={() => handleHandover(request.id)}
+                            className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md text-xs font-medium transition-colors"
+                          >
+                            Hand Over
+                          </button>
+                        )}
+                        {request.status === 'handed_over' && request.itemType === 'non_consumable' && (
+                          <button
+                            onClick={() => handleReturn(request.id)}
+                            className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md text-xs font-medium transition-colors"
+                          >
+                            Mark Returned
+                          </button>
+                        )}
+                        {request.status === 'pending' && (
+                          <span className="text-gray-400 text-xs">Awaiting Approval</span>
+                        )}
+                        {request.status === 'returned' && (
+                          <span className="text-purple-600 text-xs">Completed</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {requests.length === 0 && (
+              <div className="text-center py-12">
+                <Package className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No requests</h3>
+                <p className="mt-1 text-sm text-gray-500">No item requests found.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Handover Modal */}
       {showHandoverForm && selectedRequest && (

@@ -34,7 +34,6 @@ interface DriverRequest {
   requestedDate: string;
   estimatedCost?: number;
   location?: string;
-  odometerReading?: number;
   attachments?: string[];
   // Fueling specific fields
   litresRequested?: number;
@@ -552,19 +551,6 @@ const DriversView: React.FC = () => {
                    </div>
                  )}
                  
-                 {/* Odometer reading - only for maintenance and repair */}
-                 {(newRequest.requestType === 'maintenance' || newRequest.requestType === 'repair') && (
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-2">Odometer Reading (km)</label>
-                     <input
-                       type="number"
-                       value={newRequest.odometerReading || ''}
-                       onChange={(e) => setNewRequest({ ...newRequest, odometerReading: Number(e.target.value) })}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       placeholder="Enter current odometer reading"
-                     />
-                   </div>
-                 )}
                  
                  {/* Priority - only for repair and other */}
                  {(newRequest.requestType === 'repair' || newRequest.requestType === 'other') && (
