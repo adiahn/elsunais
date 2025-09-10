@@ -30,13 +30,18 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.log('API Error:', error.response?.status, error.config?.url);
     if (error.response?.status === 401) {
       // Only redirect if this is NOT a login request
       // Login requests should show error messages, not redirect
       const isLoginRequest = error.config?.url?.includes('/login');
+      const isComponentsRequest = error.config?.url?.includes('/components');
+      
+      console.log('401 Error - isLoginRequest:', isLoginRequest, 'isComponentsRequest:', isComponentsRequest);
       
       if (!isLoginRequest) {
         // Token expired or invalid for authenticated requests, clear auth data
+        console.log('Redirecting to login due to 401 error');
         localStorage.removeItem('authToken');
         localStorage.removeItem('userData');
         window.location.href = '/';

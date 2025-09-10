@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, Building, Receipt } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit, Trash2, Save, X, Building, Receipt, Loader2, AlertCircle } from 'lucide-react';
+import { componentService, Component } from '../../services/componentService';
 
-interface Component {
-  id: string;
-  name: string;
+interface LocalComponent extends Component {
   description: string;
   isActive: boolean;
 }
@@ -17,38 +16,10 @@ interface Tax {
 }
 
 const SettingsView: React.FC = () => {
-  const [components, setComponents] = useState<Component[]>([
-    {
-      id: '1',
-      name: 'Dryland Management',
-      description: 'Management of dryland areas and resources',
-      isActive: true
-    },
-    {
-      id: '2',
-      name: 'Community Climate Resilience',
-      description: 'Building community resilience to climate change',
-      isActive: true
-    },
-    {
-      id: '3',
-      name: 'Institutional Strengthening',
-      description: 'Strengthening institutional capacity',
-      isActive: true
-    },
-    {
-      id: '4',
-      name: 'Project Management',
-      description: 'Project management and coordination',
-      isActive: true
-    },
-    {
-      id: '5',
-      name: 'Contingency Emergency Response',
-      description: 'Emergency response and contingency planning',
-      isActive: true
-    }
-  ]);
+  const [components, setComponents] = useState<LocalComponent[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [taxes, setTaxes] = useState<Tax[]>([
     {
@@ -76,55 +47,131 @@ const SettingsView: React.FC = () => {
 
   const [showComponentForm, setShowComponentForm] = useState(false);
   const [showTaxForm, setShowTaxForm] = useState(false);
-  const [editingComponent, setEditingComponent] = useState<Component | null>(null);
+  const [editingComponent, setEditingComponent] = useState<LocalComponent | null>(null);
   const [editingTax, setEditingTax] = useState<Tax | null>(null);
   const [newComponent, setNewComponent] = useState({ name: '', description: '' });
   const [newTax, setNewTax] = useState({ name: '', percentage: 0, description: '' });
 
-  const handleCreateComponent = (e: React.FormEvent) => {
+  // Load components on mount
+  useEffect(() => {
+    console.log('SettingsView mounted, checking auth...');
+    const token = localStorage.getItem('authToken');
+    console.log('Auth token exists:', !!token);
+    loadComponents();
+  }, []);
+
+  const loadComponents = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      console.log('Loading components...');
+      const apiComponents = await componentService.getComponents();
+      console.log('API response:', apiComponents);
+      
+      // Convert API components to local format with default values
+      const localComponents: LocalComponent[] = apiComponents.map(comp => ({
+        ...comp,
+        description: comp.description || '',
+        isActive: comp.isActive ?? true
+      }));
+      
+      console.log('Local components:', localComponents);
+      setComponents(localComponents);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load components';
+      setError(errorMessage);
+      console.error('Error loading components:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateComponent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComponent.name.trim()) return;
 
-    const component: Component = {
-      id: Date.now().toString(),
-      name: newComponent.name,
-      description: newComponent.description,
-      isActive: true
-    };
-
-    setComponents([...components, component]);
-    setNewComponent({ name: '', description: '' });
-    setShowComponentForm(false);
+    try {
+      setIsLoading(true);
+      setError(null);
+      setSuccessMessage(null);
+      
+      // Create component via API
+      await componentService.createComponent({ name: newComponent.name });
+      
+      // Show success message
+      setSuccessMessage(`Component "${newComponent.name}" created successfully!`);
+      
+      // Reload components to get the updated list
+      await loadComponents();
+      
+      setNewComponent({ name: '', description: '' });
+      setShowComponentForm(false);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create component';
+      setError(errorMessage);
+      console.error('Error creating component:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleEditComponent = (component: Component) => {
+  const handleEditComponent = (component: LocalComponent) => {
     setEditingComponent(component);
     setNewComponent({ name: component.name, description: component.description });
     setShowComponentForm(true);
   };
 
-  const handleUpdateComponent = (e: React.FormEvent) => {
+  const handleUpdateComponent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingComponent || !newComponent.name.trim()) return;
 
-    setComponents(components.map(comp => 
-      comp.id === editingComponent.id 
-        ? { ...comp, name: newComponent.name, description: newComponent.description }
-        : comp
-    ));
-
-    setEditingComponent(null);
-    setNewComponent({ name: '', description: '' });
-    setShowComponentForm(false);
-  };
-
-  const handleDeleteComponent = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this component?')) {
-      setComponents(components.filter(comp => comp.id !== id));
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Update component via API
+      await componentService.updateComponent(editingComponent.id, { name: newComponent.name });
+      
+      // Reload components to get the updated list
+      await loadComponents();
+      
+      setEditingComponent(null);
+      setNewComponent({ name: '', description: '' });
+      setShowComponentForm(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update component';
+      setError(errorMessage);
+      console.error('Error updating component:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleToggleComponentStatus = (id: string) => {
+  const handleDeleteComponent = async (id: number) => {
+    if (window.confirm('Are you sure you want to delete this component?')) {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Delete component via API
+        await componentService.deleteComponent(id);
+        
+        // Reload components to get the updated list
+        await loadComponents();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to delete component';
+        setError(errorMessage);
+        console.error('Error deleting component:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleToggleComponentStatus = (id: number) => {
     setComponents(components.map(comp => 
       comp.id === id ? { ...comp, isActive: !comp.isActive } : comp
     ));
@@ -187,6 +234,8 @@ const SettingsView: React.FC = () => {
     setEditingTax(null);
     setNewComponent({ name: '', description: '' });
     setNewTax({ name: '', percentage: 0, description: '' });
+    setError(null);
+    setSuccessMessage(null);
   };
 
   return (
@@ -198,6 +247,34 @@ const SettingsView: React.FC = () => {
           <p className="text-gray-600 mt-2">Manage components and tax configurations</p>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <p className="text-red-700 text-sm">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+          <div className="w-5 h-5 bg-green-500 rounded-full flex-shrink-0"></div>
+          <p className="text-green-700 text-sm">{successMessage}</p>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="ml-auto text-green-500 hover:text-green-700"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Components Management */}
@@ -219,8 +296,21 @@ const SettingsView: React.FC = () => {
           </div>
 
           <div className="p-6">
-            <div className="space-y-4">
-              {components.map((component) => (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+                <span className="ml-2 text-gray-600">Loading components...</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {console.log('Rendering components:', components, 'Length:', components.length)}
+                {components.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Building className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No components found. Create your first component!</p>
+                  </div>
+                ) : (
+                  components.map((component) => (
                 <div key={component.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
@@ -260,8 +350,10 @@ const SettingsView: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -337,57 +429,93 @@ const SettingsView: React.FC = () => {
       {/* Component Form Modal */}
       {showComponentForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {editingComponent ? 'Edit Component' : 'Add New Component'}
-              </h3>
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <Building className="w-5 h-5 text-green-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {editingComponent ? 'Edit Component' : 'Create New Component'}
+                </h3>
+              </div>
               <button
                 onClick={cancelForm}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form onSubmit={editingComponent ? handleUpdateComponent : handleCreateComponent} className="space-y-4">
+            <form onSubmit={editingComponent ? handleUpdateComponent : handleCreateComponent} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Component Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Component Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={newComponent.name}
                   onChange={(e) => setNewComponent({ ...newComponent, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter component name"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                  placeholder="e.g., Dryland Management, Community Climate Resilience"
                   required
+                  disabled={isLoading}
                 />
+                <p className="text-xs text-gray-500 mt-1">Enter a descriptive name for the component</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description <span className="text-gray-400">(Optional)</span>
+                </label>
                 <textarea
                   value={newComponent.description}
                   onChange={(e) => setNewComponent({ ...newComponent, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter component description"
-                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors resize-none"
+                  placeholder="Provide additional details about this component..."
+                  rows={4}
+                  disabled={isLoading}
                 />
+                <p className="text-xs text-gray-500 mt-1">Add a detailed description to help identify this component</p>
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-4">
+              {/* Success Message */}
+              {!isLoading && !error && newComponent.name && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <p className="text-sm text-green-700">
+                      Ready to {editingComponent ? 'update' : 'create'} component
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={cancelForm}
-                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                  disabled={isLoading}
+                  className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  disabled={isLoading || !newComponent.name.trim()}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed"
                 >
-                  <Save className="w-4 h-4" />
-                  {editingComponent ? 'Update' : 'Create'}
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {editingComponent ? 'Updating...' : 'Creating...'}
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      {editingComponent ? 'Update Component' : 'Create Component'}
+                    </>
+                  )}
                 </button>
               </div>
             </form>
