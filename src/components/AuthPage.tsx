@@ -1,20 +1,30 @@
-import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, ArrowLeft, Users, Globe } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, ArrowRight, ArrowLeft, Users, Globe, AlertCircle, Loader2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
-interface AuthPageProps {
-  onLogin: () => void;
-}
-
-const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
+const AuthPage: React.FC = () => {
+  const { login, isLoading, error, clearError } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Clear error when switching between login/forgot password
+  useEffect(() => {
+    clearError();
+  }, [isLogin, isForgotPassword, clearError]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLogin) {
-      onLogin();
+      try {
+        console.log('Attempting login with:', { email, password: '***' });
+        await login({ email, password });
+        console.log('Login successful');
+      } catch (error) {
+        // Error is handled by the auth context
+        console.error('Login error:', error);
+      }
     } else if (isForgotPassword) {
       alert('Password reset link sent to your email!');
       setIsForgotPassword(false);
@@ -99,6 +109,14 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <p className="text-red-700 text-sm">{error}</p>
+                </div>
+              )}
+
               <div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -109,6 +127,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                     placeholder="Email"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -124,6 +143,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                       className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                       placeholder="Password"
                       required
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -135,13 +155,15 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     <input
                       type="checkbox"
                       className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                      disabled={isLoading}
                     />
                     <span className="ml-2 text-sm text-gray-600">Remember me</span>
                   </label>
                   <button
                     type="button"
                     onClick={handleForgotPassword}
-                    className="text-sm text-green-600 hover:text-green-800 font-medium transition-colors"
+                    className="text-sm text-green-600 hover:text-green-800 font-medium transition-colors disabled:opacity-50"
+                    disabled={isLoading}
                   >
                     Forgot password?
                   </button>
@@ -150,9 +172,15 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
 
               <button
                 type="submit"
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-full font-medium transition-colors duration-200 flex items-center justify-center gap-2"
+                disabled={isLoading}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-3 px-4 rounded-full font-medium transition-colors duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
               >
-                {isLogin ? (
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : isLogin ? (
                   <>
                     SIGN IN
                     <ArrowRight className="w-4 h-4" />
