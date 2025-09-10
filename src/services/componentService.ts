@@ -61,10 +61,7 @@ class ComponentService {
    */
   async getComponents(): Promise<Component[]> {
     try {
-      console.log('Making API call to /components');
       const response = await apiClient.get<ComponentListResponse>('/components');
-      console.log('Raw API response:', response);
-      console.log('Response data:', response.data);
       return response.data || [];
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {

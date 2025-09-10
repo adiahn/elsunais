@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, Users, Search, Eye, DollarSign, Building, ArrowLeft, Activity, FileText, MessageSquare, Settings, Edit, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Calendar, Users, Search, Eye, DollarSign, Building, ArrowLeft, Activity, FileText, MessageSquare, Settings, Edit, Download, ChevronDown, ChevronRight, Loader2, AlertCircle, X } from 'lucide-react';
+import { componentService, Component as ApiComponent } from '../../services/componentService';
 
 interface Activity {
   id: string;
@@ -257,13 +258,39 @@ const WorkplanView: React.FC = () => {
     });
   }, [showCreateForm, showCreateProjectForm, showCreateActivityForm]);
 
-  // Mock settings data - in real app this would come from settings/API
-  const availableComponents = [
-    { id: 'A', name: 'Dryland Management' },
-    { id: 'B', name: 'Community Climate Resillience' },
-    { id: 'C', name: 'Institutional Strengthening and Project Management' },
-    { id: 'D', name: 'Contingency Emergency Response' }
-  ];
+  // State for API components
+  const [availableComponents, setAvailableComponents] = useState<ApiComponent[]>([]);
+  const [isLoadingComponents, setIsLoadingComponents] = useState(false);
+  const [componentsError, setComponentsError] = useState<string | null>(null);
+
+  // Fetch components from API on mount
+  useEffect(() => {
+    const fetchComponents = async () => {
+      try {
+        setIsLoadingComponents(true);
+        setComponentsError(null);
+        
+        // Check if user is authenticated
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          setComponentsError('Please log in to view components');
+          return;
+        }
+        
+        const apiComponents = await componentService.getComponents();
+        setAvailableComponents(apiComponents);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load components';
+        setComponentsError(errorMessage);
+        console.error('Error fetching components:', err);
+      } finally {
+        setIsLoadingComponents(false);
+      }
+    };
+
+    fetchComponents();
+  }, []);
+
   const subComponentOptions = {
     'A': ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10'],
     'B': ['B1', 'B2', 'B3', 'B4', 'B5'],
@@ -353,6 +380,7 @@ const WorkplanView: React.FC = () => {
     setNewProject({
       name: '',
       projectId: '',
+      fileNo: '',
       expectedStartDate: '',
       expectedEndDate: '',
       idaFunding: 0,
@@ -1308,31 +1336,57 @@ const WorkplanView: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative shadow-2xl">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Create New Workplan</h2>
+            
+            {/* Error Message */}
+            {componentsError && (
+              <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-red-700 text-sm">{componentsError}</p>
+                <button
+                  onClick={() => setComponentsError(null)}
+                  className="ml-auto text-red-500 hover:text-red-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             <form onSubmit={handleCreateComponent} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Component
                 </label>
-                <select
-                  value={newComponent.componentId}
-                  onChange={(e) => {
-                    const selected = availableComponents.find(comp => comp.id === e.target.value);
-                    setNewComponent({ 
-                      ...newComponent, 
-                      componentId: e.target.value,
-                      name: selected ? selected.name : ''
-                    });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                >
-                  <option value="">Select Component</option>
-                  {availableComponents.map((component) => (
-                    <option key={component.id} value={component.id}>
-                      {component.id} - {component.name}
-                    </option>
-                  ))}
-                </select>
+                {isLoadingComponents ? (
+                  <div className="flex items-center justify-center py-4 border border-gray-300 rounded-md">
+                    <Loader2 className="w-4 h-4 animate-spin text-green-600 mr-2" />
+                    <span className="text-gray-600">Loading components...</span>
+                  </div>
+                ) : (
+                  <select
+                    value={newComponent.componentId}
+                    onChange={(e) => {
+                      const selected = availableComponents.find(comp => comp.id.toString() === e.target.value);
+                      setNewComponent({ 
+                        ...newComponent, 
+                        componentId: e.target.value,
+                        name: selected ? selected.name : ''
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                    disabled={isLoadingComponents}
+                  >
+                    <option value="">Select Component</option>
+                    {availableComponents.map((component) => (
+                      <option key={component.id} value={component.id.toString()}>
+                        {component.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {availableComponents.length === 0 && !isLoadingComponents && !componentsError && (
+                  <p className="text-sm text-gray-500 mt-1">No components available. Create components in Settings first.</p>
+                )}
               </div>
               <div className="flex items-center justify-end space-x-3 pt-4">
                 <button
@@ -1344,7 +1398,8 @@ const WorkplanView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  disabled={isLoadingComponents || availableComponents.length === 0}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed"
                 >
                   Create Workplan
                 </button>
@@ -1397,8 +1452,8 @@ const WorkplanView: React.FC = () => {
                     required
                   >
                     <option value="">Select Sub Component</option>
-                    {selectedComponent?.componentId && 
-                      subComponentOptions[selectedComponent.componentId as keyof typeof subComponentOptions]?.map((id: string) => (
+                    {selectedComponent && (selectedComponent as Component).componentId && 
+                      subComponentOptions[(selectedComponent as Component).componentId as keyof typeof subComponentOptions]?.map((id: string) => (
                         <option key={id} value={id}>{id}</option>
                       ))
                     }
