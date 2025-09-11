@@ -45,172 +45,7 @@ interface ActivityLog {
 
 
 const WorkplanView: React.FC = () => {
-  const [components, setComponents] = useState<Component[]>([
-    {
-      id: '1',
-      name: 'Dryland Management',
-      componentId: 'A',
-      projects: [
-        {
-          id: '1-1',
-          name: 'Area Supervision',
-          projectId: 'A1',
-          fileNo: 'ACRESAL-001',
-          expectedStartDate: '2025-02-01',
-          expectedEndDate: '2025-08-01',
-          idaFunding: 500000,
-          gcfFunding: 200000,
-          leadImplementation: 'Engineering Team',
-          partners: 'Local Construction Co.',
-          procurementMethod: 'Open Tender',
-          status: 'in_progress',
-          activities: [
-            {
-              id: '1-1-1',
-              name: 'Mobilization of funds',
-              date: '2025-02-01',
-              description: 'Initial fund mobilization for project startup',
-              status: 'completed'
-            },
-            {
-              id: '1-1-2',
-              name: 'Site preparation',
-              date: '2025-02-15',
-              description: 'Preparing construction sites for drainage work',
-              status: 'in_progress'
-            }
-          ]
-        },
-        {
-          id: '1-2',
-          name: 'Drainage Construction',
-          projectId: 'A2',
-          fileNo: 'ACRESAL-002',
-          expectedStartDate: '2025-03-01',
-          expectedEndDate: '2025-09-01',
-          idaFunding: 300000,
-          gcfFunding: 0,
-          leadImplementation: 'Environmental Team',
-          partners: 'Green Solutions Ltd.',
-          procurementMethod: 'Restricted Tender',
-          status: 'approved',
-          activities: [
-            {
-              id: '1-2-1',
-              name: 'Equipment procurement',
-              date: '2025-03-01',
-              description: 'Procuring construction equipment for drainage work',
-              status: 'pending'
-            }
-          ]
-        },
-        {
-          id: '1-3',
-          name: 'Community Engagement',
-          projectId: 'A3',
-          expectedStartDate: '2025-04-01',
-          expectedEndDate: '2025-10-01',
-          idaFunding: 0,
-          gcfFunding: 400000,
-          leadImplementation: 'Community Team',
-          partners: 'Local NGOs',
-          procurementMethod: 'Direct Procurement',
-          status: 'completed',
-          fileNo: 'ACRESAL-003',
-          activities: [
-            {
-              id: '1-3-1',
-              name: 'Stakeholder meetings',
-              date: '2025-04-01',
-              description: 'Meeting with community stakeholders',
-              status: 'completed'
-            }
-          ]
-        }
-      ]
-    },
-    {
-      id: '2',
-      name: 'Community Climate Resillience',
-      componentId: 'B',
-      projects: [
-        {
-          id: '2-1',
-          name: 'Training Program',
-          projectId: 'B1',
-          expectedStartDate: '2025-01-15',
-          expectedEndDate: '2026-01-15',
-          idaFunding: 0,
-          gcfFunding: 300000,
-          leadImplementation: 'Training Department',
-          partners: 'Training Institute',
-          procurementMethod: 'Direct Procurement',
-          status: 'in_progress',
-          fileNo: 'ACRESAL-004',
-          activities: []
-        },
-        {
-          id: '2-2',
-          name: 'HR Development',
-          projectId: 'B2',
-          expectedStartDate: '2025-02-15',
-          expectedEndDate: '2026-02-15',
-          idaFunding: 250000,
-          gcfFunding: 150000,
-          leadImplementation: 'HR Department',
-          partners: 'HR Consultants',
-          procurementMethod: 'Framework Agreement',
-          status: 'completed',
-          fileNo: 'ACRESAL-005',
-          activities: []
-        }
-      ]
-    },
-    {
-      id: '3',
-      name: 'Institutional Strengthening and Project Management',
-      componentId: 'C',
-      projects: [
-        {
-          id: '3-1',
-          name: 'IT System Implementation',
-          projectId: 'C1',
-          expectedStartDate: '2025-03-01',
-          expectedEndDate: '2025-12-01',
-          idaFunding: 750000,
-          gcfFunding: 0,
-          leadImplementation: 'IT Department',
-          partners: 'Tech Solutions Ltd.',
-          procurementMethod: 'Restricted Tender',
-          status: 'in_progress',
-          fileNo: 'ACRESAL-006',
-          activities: []
-        }
-      ]
-    },
-    {
-      id: '4',
-      name: 'Contingency Emergency Response',
-      componentId: 'D',
-      projects: [
-        {
-          id: '3-1',
-          name: 'IT System Implementation',
-          projectId: 'D1',
-          expectedStartDate: '2025-03-01',
-          expectedEndDate: '2025-12-01',
-          idaFunding: 750000,
-          gcfFunding: 0,
-          leadImplementation: 'IT Department',
-          partners: 'Tech Solutions Ltd.',
-          procurementMethod: 'Restricted Tender',
-          status: 'in_progress',
-          fileNo: 'ACRESAL-007',
-          activities: []
-        }
-      ]
-    }
-  ]);
+  const [components, setComponents] = useState<Component[]>([]);
   
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showCreateProjectForm, setShowCreateProjectForm] = useState(false);
@@ -279,6 +114,16 @@ const WorkplanView: React.FC = () => {
         
         const apiComponents = await componentService.getComponents();
         setAvailableComponents(apiComponents);
+        
+        // Convert API components to workplan components format
+        const workplanComponents: Component[] = apiComponents.map((apiComp, index) => ({
+          id: apiComp.id.toString(),
+          name: apiComp.name,
+          componentId: String.fromCharCode(65 + index), // A, B, C, D, etc.
+          projects: []
+        }));
+        
+        setComponents(workplanComponents);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load components';
         setComponentsError(errorMessage);
@@ -1230,7 +1075,38 @@ const WorkplanView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredComponents.map((component) => (
+              {isLoadingComponents ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-green-600 mr-2" />
+                      <span className="text-gray-600">Loading components...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : componentsError ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <div className="flex items-center justify-center">
+                      <AlertCircle className="w-6 h-6 text-red-500 mr-2" />
+                      <span className="text-red-600">{componentsError}</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredComponents.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center">
+                      <Building className="w-12 h-12 text-gray-300 mb-4" />
+                      <p className="text-gray-500 text-lg font-medium">No components found</p>
+                      <p className="text-gray-400 text-sm mt-1">
+                        {searchTerm ? 'No components match your search criteria' : 'Create components in Settings to get started'}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredComponents.map((component) => (
                 <React.Fragment key={component.id}>
                   {/* Component Row */}
                   <tr className="hover:bg-gray-50">
@@ -1325,7 +1201,8 @@ const WorkplanView: React.FC = () => {
                     </tr>
                   ))}
                 </React.Fragment>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>

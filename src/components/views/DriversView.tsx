@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Plus, Car, User, Wrench, Fuel, AlertTriangle, CheckCircle, XCircle, Clock as ClockIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Car, User, Wrench, Fuel, AlertTriangle, CheckCircle, XCircle, Clock as ClockIcon, Loader2, AlertCircle } from 'lucide-react';
+import { driverService, DriverRequest as ApiDriverRequest } from '../../services/driverService';
 
 interface Vehicle {
   id: string;
@@ -41,6 +42,11 @@ interface DriverRequest {
   totalFuelCost?: number;
   // Vehicle change justification
   vehicleChangeReason?: string;
+}
+
+// Local driver request interface for UI compatibility
+interface LocalDriverRequest extends DriverRequest {
+  odometerReading?: number;
 }
 
 const DriversView: React.FC = () => {
@@ -108,49 +114,12 @@ const DriversView: React.FC = () => {
     }
   ]);
 
-  const [driverRequests, setDriverRequests] = useState<DriverRequest[]>([
-    {
-      id: '1',
-      driverId: '1',
-      vehicleId: '1',
-      requestType: 'maintenance',
-      description: 'Oil change and filter replacement',
-      priority: 'medium',
-      status: 'pending',
-      requestedDate: '2025-01-20',
-      estimatedCost: 75,
-      location: 'Main Garage',
-      odometerReading: 45000
-    },
-    {
-      id: '2',
-      driverId: '2',
-      vehicleId: '2',
-      requestType: 'fueling',
-      description: 'Fuel tank refill',
-      priority: 'high',
-      status: 'approved',
-      requestedDate: '2025-01-19',
-      location: 'Gas Station - Main St',
-      odometerReading: 32000,
-      litresRequested: 50,
-      pricePerLitre: 2.50,
-      totalFuelCost: 125
-    },
-    {
-      id: '3',
-      driverId: '1',
-      vehicleId: '3',
-      requestType: 'repair',
-      description: 'Brake pad replacement needed',
-      priority: 'urgent',
-      status: 'in_progress',
-      requestedDate: '2025-01-18',
-      estimatedCost: 200,
-      location: 'Auto Repair Shop',
-      odometerReading: 28000
-    }
-  ]);
+  const [driverRequests, setDriverRequests] = useState<LocalDriverRequest[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<DriverRequest | null>(null);
@@ -163,12 +132,60 @@ const DriversView: React.FC = () => {
     priority: 'medium',
     status: 'pending',
     requestedDate: new Date().toISOString().split('T')[0],
-    odometerReading: 0,
     litresRequested: 0,
     pricePerLitre: 0,
     totalFuelCost: 0,
     vehicleChangeReason: ''
   });
+
+  // Fetch driver requests on mount
+  useEffect(() => {
+    const fetchDriverRequests = async () => {
+      try {
+        setIsLoadingRequests(true);
+        setRequestsError(null);
+        
+        // Check if user is authenticated
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          setRequestsError('Please log in to view requests');
+          return;
+        }
+        
+        // For now, use driver ID 1 (in real app, this would be the logged-in driver's ID)
+        const driverId = 1;
+        const apiRequests = await driverService.getDriverRequests(driverId);
+        
+        // Convert API requests to local format
+        const localRequests: LocalDriverRequest[] = apiRequests.map(apiReq => ({
+          id: apiReq.id?.toString() || '',
+          driverId: driverId.toString(),
+          vehicleId: apiReq.vehicle_id || '1',
+          requestType: apiReq.request_type === 'fuel' ? 'fueling' : apiReq.request_type as any,
+          description: apiReq.description || '',
+          priority: apiReq.priority || 'medium',
+          status: apiReq.status || 'pending',
+          requestedDate: apiReq.requested_date || new Date().toISOString().split('T')[0],
+          estimatedCost: apiReq.estimated_cost,
+          location: apiReq.location,
+          litresRequested: apiReq.liters,
+          pricePerLitre: apiReq.price_per_liter,
+          totalFuelCost: apiReq.liters && apiReq.price_per_liter ? apiReq.liters * apiReq.price_per_liter : 0,
+          odometerReading: 0 // This would come from the API in a real implementation
+        }));
+        
+        setDriverRequests(localRequests);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load requests';
+        setRequestsError(errorMessage);
+        console.error('Error fetching driver requests:', err);
+      } finally {
+        setIsLoadingRequests(false);
+      }
+    };
+
+    fetchDriverRequests();
+  }, []);
 
   const getRequestTypeIcon = (type: DriverRequest['requestType']) => {
     switch (type) {
@@ -219,38 +236,88 @@ const DriversView: React.FC = () => {
     }
   };
 
-  const handleCreateRequest = (e: React.FormEvent) => {
+  const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Calculate total fuel cost if it's a fueling request
-    let totalFuelCost = 0;
-    if (newRequest.requestType === 'fueling' && newRequest.litresRequested && newRequest.pricePerLitre) {
-      totalFuelCost = newRequest.litresRequested * newRequest.pricePerLitre;
+    try {
+      setIsSubmittingRequest(true);
+      setSubmitError(null);
+      setSubmitSuccess(null);
+      
+      // Calculate total fuel cost if it's a fueling request
+      let totalFuelCost = 0;
+      if (newRequest.requestType === 'fueling' && newRequest.litresRequested && newRequest.pricePerLitre) {
+        totalFuelCost = newRequest.litresRequested * newRequest.pricePerLitre;
+      }
+      
+      // Prepare API request data
+      const apiRequestData = {
+        request_type: newRequest.requestType === 'fueling' ? 'fuel' : newRequest.requestType as any,
+        liters: newRequest.requestType === 'fueling' ? newRequest.litresRequested : undefined,
+        price_per_liter: newRequest.requestType === 'fueling' ? newRequest.pricePerLitre : undefined,
+        description: newRequest.description,
+        priority: newRequest.priority,
+        location: newRequest.location,
+        estimated_cost: newRequest.estimatedCost,
+        vehicle_id: newRequest.vehicleId
+      };
+      
+      // Submit request to API
+      const driverId = 1; // In real app, this would be the logged-in driver's ID
+      const response = await driverService.submitRequest(driverId, apiRequestData);
+      
+      // Show success message
+      setSubmitSuccess('Request submitted successfully!');
+      
+      // Refresh the requests list
+      const apiRequests = await driverService.getDriverRequests(driverId);
+      const localRequests: LocalDriverRequest[] = apiRequests.map(apiReq => ({
+        id: apiReq.id?.toString() || '',
+        driverId: driverId.toString(),
+        vehicleId: apiReq.vehicle_id || '1',
+        requestType: apiReq.request_type === 'fuel' ? 'fueling' : apiReq.request_type as any,
+        description: apiReq.description || '',
+        priority: apiReq.priority || 'medium',
+        status: apiReq.status || 'pending',
+        requestedDate: apiReq.requested_date || new Date().toISOString().split('T')[0],
+        estimatedCost: apiReq.estimated_cost,
+        location: apiReq.location,
+        litresRequested: apiReq.liters,
+        pricePerLitre: apiReq.price_per_liter,
+        totalFuelCost: apiReq.liters && apiReq.price_per_liter ? apiReq.liters * apiReq.price_per_liter : 0,
+        odometerReading: 0
+      }));
+      
+      setDriverRequests(localRequests);
+      
+      // Reset form
+      setNewRequest({
+        driverId: '1',
+        vehicleId: '1',
+        requestType: 'maintenance',
+        description: '',
+        priority: 'medium',
+        status: 'pending',
+        requestedDate: new Date().toISOString().split('T')[0],
+        litresRequested: 0,
+        pricePerLitre: 0,
+        totalFuelCost: 0,
+        vehicleChangeReason: ''
+      });
+      
+      // Close form after a short delay
+      setTimeout(() => {
+        setShowCreateRequestForm(false);
+        setSubmitSuccess(null);
+      }, 2000);
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to submit request';
+      setSubmitError(errorMessage);
+      console.error('Error submitting request:', err);
+    } finally {
+      setIsSubmittingRequest(false);
     }
-    
-    const request: DriverRequest = {
-      ...newRequest,
-      id: Date.now().toString(),
-      driverId: '1', // Default to first driver (in real app, this would be the logged-in driver)
-      totalFuelCost: newRequest.requestType === 'fueling' ? totalFuelCost : undefined
-    };
-    
-    setDriverRequests([...driverRequests, request]);
-    setNewRequest({
-      driverId: '1',
-      vehicleId: '1',
-      requestType: 'maintenance',
-      description: '',
-      priority: 'medium',
-      status: 'pending',
-      requestedDate: new Date().toISOString().split('T')[0],
-      odometerReading: 0,
-      litresRequested: 0,
-      pricePerLitre: 0,
-      totalFuelCost: 0,
-      vehicleChangeReason: ''
-    });
-    setShowCreateRequestForm(false);
   };
 
   const getDriverName = (driverId: string) => {
@@ -292,13 +359,56 @@ const DriversView: React.FC = () => {
          </div>
        </div>
 
+       {/* Error Message */}
+       {requestsError && (
+         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+           <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+           <p className="text-red-700 text-sm">{requestsError}</p>
+           <button
+             onClick={() => setRequestsError(null)}
+             className="ml-auto text-red-500 hover:text-red-700"
+           >
+             ×
+           </button>
+         </div>
+       )}
+
+       {/* Success Message */}
+       {submitSuccess && (
+         <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+           <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+           <p className="text-green-700 text-sm">{submitSuccess}</p>
+           <button
+             onClick={() => setSubmitSuccess(null)}
+             className="ml-auto text-green-500 hover:text-green-700"
+           >
+             ×
+           </button>
+         </div>
+       )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                  {/* My Requests List */}
          <div className="lg:col-span-1">
            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
              <h2 className="text-lg font-semibold text-gray-900 mb-4">My Requests</h2>
-             <div className="space-y-3">
-               {driverRequests.map((request) => (
+             
+             {isLoadingRequests ? (
+               <div className="flex items-center justify-center py-8">
+                 <div className="flex items-center gap-2">
+                   <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                   <span className="text-gray-600">Loading requests...</span>
+                 </div>
+               </div>
+             ) : driverRequests.length === 0 ? (
+               <div className="text-center py-8">
+                 <Car className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                 <p className="text-gray-500 text-sm">No requests found</p>
+                 <p className="text-gray-400 text-xs mt-1">Submit your first request to get started</p>
+               </div>
+             ) : (
+               <div className="space-y-3">
+                 {driverRequests.map((request) => (
                  <div
                    key={request.id}
                    onClick={() => setSelectedRequest(request)}
@@ -332,8 +442,9 @@ const DriversView: React.FC = () => {
                      </div>
                    </div>
                  </div>
-               ))}
-             </div>
+                 ))}
+               </div>
+             )}
            </div>
          </div>
 
@@ -430,8 +541,37 @@ const DriversView: React.FC = () => {
       {showCreateRequestForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto relative shadow-2xl">
-                         <h2 className="text-xl font-semibold text-gray-900 mb-6">Submit Service Request</h2>
-             <form onSubmit={handleCreateRequest} className="space-y-4">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Submit Service Request</h2>
+            
+            {/* Error Message */}
+            {submitError && (
+              <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-red-700 text-sm">{submitError}</p>
+                <button
+                  onClick={() => setSubmitError(null)}
+                  className="ml-auto text-red-500 hover:text-red-700"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {submitSuccess && (
+              <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-3">
+                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <p className="text-green-700 text-sm">{submitSuccess}</p>
+                <button
+                  onClick={() => setSubmitSuccess(null)}
+                  className="ml-auto text-green-500 hover:text-green-700"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            
+            <form onSubmit={handleCreateRequest} className="space-y-4">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div>
                    <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle</label>
@@ -605,17 +745,24 @@ const DriversView: React.FC = () => {
               <div className="flex items-center justify-end space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowCreateRequestForm(false)}
+                  onClick={() => {
+                    setShowCreateRequestForm(false);
+                    setSubmitError(null);
+                    setSubmitSuccess(null);
+                  }}
                   className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                  disabled={isSubmittingRequest}
                 >
                   Cancel
                 </button>
-                                 <button
-                   type="submit"
-                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                 >
-                   Submit Request
-                 </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={isSubmittingRequest}
+                >
+                  {isSubmittingRequest && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isSubmittingRequest ? 'Submitting...' : 'Submit Request'}
+                </button>
               </div>
             </form>
           </div>

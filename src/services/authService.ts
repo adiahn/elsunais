@@ -4,15 +4,10 @@ import { LoginRequest, LoginResponse, User } from '../types/auth';
 class AuthService {
   private readonly TOKEN_KEY = 'authToken';
   private readonly USER_KEY = 'userData';
-
-  /**
-   * Login user with email and password
-   */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
       const response = await apiClient.post<LoginResponse>('/login', credentials);
       
-      // Store token and user data
       this.setToken(response.data.token);
       this.setUser({
         email: response.data.email,
@@ -21,7 +16,6 @@ class AuthService {
       
       return response.data;
     } catch (error: unknown) {
-      // Handle different types of errors
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as any;
         const status = axiosError.response?.status;

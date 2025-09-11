@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Plus, Package, CheckCircle, Clock, AlertTriangle, Building, Wrench, Settings, Users, ArrowRight, ArrowLeft, FileText, Box } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Package, CheckCircle, Clock, AlertTriangle, Building, Wrench, Settings, Users, ArrowRight, ArrowLeft, FileText, Box, Loader2, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { storeService, StoreItem as ApiStoreItem, StoreRequest as ApiStoreRequest } from '../../services/storeService';
 
-interface StoreItem {
+// Local UI interfaces for compatibility
+interface LocalStoreItem {
   id: string;
   name: string;
   description: string;
@@ -14,7 +16,7 @@ interface StoreItem {
   location: string;
 }
 
-interface ItemRequest {
+interface LocalItemRequest {
   id: string;
   itemId: string;
   itemName: string;
@@ -22,147 +24,284 @@ interface ItemRequest {
   quantity: number;
   unit: string;
   purpose: string;
-  status: 'pending' | 'approved' | 'handed_over' | 'returned' | 'rejected';
+  status: 'pending' | 'approved' | 'issued' | 'returned' | 'rejected';
   requestDate: string;
   approvedDate?: string;
-  handoverDate?: string;
+  issuedDate?: string;
   returnDate?: string;
   requestedBy: string;
   department: string;
   approvedBy?: string;
-  handedOverBy?: string;
+  issuedBy?: string;
   notes?: string;
   expectedReturnDate?: string; // Only for non-consumables
 }
 
 const StoreManagerView: React.FC = () => {
-  const [items, setItems] = useState<StoreItem[]>([
-    {
-      id: '1',
-      name: 'A4 Paper',
-      description: 'White A4 printing paper',
-      category: 'office_supplies',
-      type: 'consumable',
-      quantity: 50,
-      unit: 'reams',
-      unitPrice: 15.00,
-      supplier: 'Paper Co.',
-      location: 'Shelf A1'
-    },
-    {
-      id: '2',
-      name: 'Laptop',
-      description: 'Dell Latitude 5520',
-      category: 'electronics',
-      type: 'non_consumable',
-      quantity: 5,
-      unit: 'units',
-      unitPrice: 1200.00,
-      supplier: 'Dell Inc.',
-      location: 'Storage Room B'
-    },
-    {
-      id: '3',
-      name: 'Pen Set',
-      description: 'Blue ink ballpoint pens',
-      category: 'office_supplies',
-      type: 'consumable',
-      quantity: 200,
-      unit: 'pieces',
-      unitPrice: 0.50,
-      supplier: 'Office Depot',
-      location: 'Shelf A2'
-    },
-    {
-      id: '4',
-      name: 'Projector',
-      description: 'Epson PowerLite 1781W',
-      category: 'electronics',
-      type: 'non_consumable',
-      quantity: 3,
-      unit: 'units',
-      unitPrice: 800.00,
-      supplier: 'Epson',
-      location: 'Storage Room A'
-    }
-  ]);
+  // API state
+  const [items, setItems] = useState<LocalStoreItem[]>([]);
+  const [requests, setRequests] = useState<LocalItemRequest[]>([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+  const [itemsError, setItemsError] = useState<string | null>(null);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [requests, setRequests] = useState<ItemRequest[]>([
-    {
-      id: '1',
-      itemId: '1',
-      itemName: 'A4 Paper',
-      itemType: 'consumable',
-      quantity: 5,
-      unit: 'reams',
-      purpose: 'Office printing needs',
-      status: 'approved',
-      requestDate: '2025-01-20',
-      approvedDate: '2025-01-21',
-      requestedBy: 'Aisha Ibrahim',
-      department: 'Administration',
-      approvedBy: 'Adnan Mukhtar'
-    },
-    {
-      id: '2',
-      itemId: '2',
-      itemName: 'Laptop',
-      itemType: 'non_consumable',
-      quantity: 1,
-      unit: 'unit',
-      purpose: 'Field work assignment',
-      status: 'handed_over',
-      requestDate: '2025-01-18',
-      approvedDate: '2025-01-19',
-      handoverDate: '2025-01-20',
-      requestedBy: 'Yusuf Abdullahi',
-      department: 'Field Operations',
-      approvedBy: 'Adnan Mukhtar',
-      handedOverBy: 'Store Manager',
-      expectedReturnDate: '2025-02-20'
-    },
-    {
-      id: '3',
-      itemId: '3',
-      itemName: 'Pen Set',
-      itemType: 'consumable',
-      quantity: 20,
-      unit: 'pieces',
-      purpose: 'Office stationery',
-      status: 'pending',
-      requestDate: '2025-01-22',
-      requestedBy: 'Fatima Usman',
-      department: 'HR'
-    },
-    {
-      id: '4',
-      itemId: '4',
-      itemName: 'Projector',
-      itemType: 'non_consumable',
-      quantity: 1,
-      unit: 'unit',
-      purpose: 'Training session',
-      status: 'returned',
-      requestDate: '2025-01-10',
-      approvedDate: '2025-01-11',
-      handoverDate: '2025-01-12',
-      returnDate: '2025-01-15',
-      requestedBy: 'Zainab Hassan',
-      department: 'Training',
-      approvedBy: 'Adnan Mukhtar',
-      handedOverBy: 'Store Manager',
-      expectedReturnDate: '2025-01-20'
-    }
-  ]);
-
+  // UI state
   const [showHandoverForm, setShowHandoverForm] = useState(false);
   const [showReturnForm, setShowReturnForm] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<ItemRequest | null>(null);
+  const [showCreateItemForm, setShowCreateItemForm] = useState(false);
+  const [showEditItemForm, setShowEditItemForm] = useState(false);
+  const [showCreateRequestForm, setShowCreateRequestForm] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<LocalItemRequest | null>(null);
+  const [selectedItem, setSelectedItem] = useState<LocalStoreItem | null>(null);
   const [handoverNotes, setHandoverNotes] = useState('');
   const [returnNotes, setReturnNotes] = useState('');
   const [activeTab, setActiveTab] = useState<'inventory' | 'requests'>('inventory');
 
-  const getItemTypeIcon = (type: StoreItem['type']) => {
+  // Form state
+  const [newItem, setNewItem] = useState({
+    name: '',
+    description: '',
+    is_consumable: true,
+    quantity: 0
+  });
+  
+  const [newRequest, setNewRequest] = useState({
+    item_id: 0,
+    quantity: 0
+  });
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetchItems();
+    fetchRequests();
+  }, []);
+
+  const fetchItems = async () => {
+    try {
+      setIsLoadingItems(true);
+      setItemsError(null);
+      
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setItemsError('Please log in to view items');
+        return;
+      }
+      
+      const apiItems = await storeService.getItems();
+      
+      // Convert API items to local format
+      const localItems: LocalStoreItem[] = apiItems.map(apiItem => ({
+        id: apiItem.id?.toString() || '',
+        name: apiItem.name,
+        description: apiItem.description,
+        category: 'other', // Default category since API doesn't have this
+        type: apiItem.is_consumable ? 'consumable' : 'non_consumable',
+        quantity: apiItem.quantity,
+        unit: 'units', // Default unit since API doesn't have this
+        unitPrice: 0, // Default price since API doesn't have this
+        location: 'Store' // Default location since API doesn't have this
+      }));
+      
+      setItems(localItems);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load items';
+      setItemsError(errorMessage);
+      console.error('Error fetching items:', err);
+    } finally {
+      setIsLoadingItems(false);
+    }
+  };
+
+  const fetchRequests = async () => {
+    try {
+      setIsLoadingRequests(true);
+      setRequestsError(null);
+      
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setRequestsError('Please log in to view requests');
+        return;
+      }
+      
+      const apiRequests = await storeService.getRequests();
+      
+      // Convert API requests to local format
+      const localRequests: LocalItemRequest[] = apiRequests.map(apiReq => ({
+        id: apiReq.id?.toString() || '',
+        itemId: apiReq.item_id.toString(),
+        itemName: items.find(item => item.id === apiReq.item_id.toString())?.name || 'Unknown Item',
+        itemType: items.find(item => item.id === apiReq.item_id.toString())?.type || 'consumable',
+        quantity: apiReq.quantity,
+        unit: 'units',
+        purpose: 'General use', // Default purpose since API doesn't have this
+        status: apiReq.status || 'pending',
+        requestDate: apiReq.requested_date || new Date().toISOString().split('T')[0],
+        approvedDate: apiReq.approved_date,
+        issuedDate: apiReq.issued_date,
+        returnDate: apiReq.returned_date,
+        requestedBy: apiReq.requested_by || 'Unknown User',
+        department: 'General', // Default department since API doesn't have this
+        approvedBy: apiReq.approved_by,
+        issuedBy: apiReq.issued_by,
+        notes: apiReq.notes
+      }));
+      
+      setRequests(localRequests);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load requests';
+      setRequestsError(errorMessage);
+      console.error('Error fetching requests:', err);
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  };
+
+  // API integration functions
+  const handleCreateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.createItem(newItem);
+      setSuccessMessage('Item created successfully!');
+      setNewItem({ name: '', description: '', is_consumable: true, quantity: 0 });
+      setShowCreateItemForm(false);
+      fetchItems(); // Refresh items list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create item';
+      setErrorMessage(errorMessage);
+      console.error('Error creating item:', err);
+    }
+  };
+
+  const handleUpdateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem) return;
+    
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.updateItem(parseInt(selectedItem.id), {
+        name: newItem.name,
+        description: newItem.description,
+        is_consumable: newItem.is_consumable,
+        quantity: newItem.quantity
+      });
+      
+      setSuccessMessage('Item updated successfully!');
+      setShowEditItemForm(false);
+      setSelectedItem(null);
+      fetchItems(); // Refresh items list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update item';
+      setErrorMessage(errorMessage);
+      console.error('Error updating item:', err);
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    if (!confirm('Are you sure you want to delete this item?')) return;
+    
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.deleteItem(parseInt(itemId));
+      setSuccessMessage('Item deleted successfully!');
+      fetchItems(); // Refresh items list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete item';
+      setErrorMessage(errorMessage);
+      console.error('Error deleting item:', err);
+    }
+  };
+
+  const handleCreateRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.createRequest(newRequest);
+      setSuccessMessage('Request created successfully!');
+      setNewRequest({ item_id: 0, quantity: 0 });
+      setShowCreateRequestForm(false);
+      fetchRequests(); // Refresh requests list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create request';
+      setErrorMessage(errorMessage);
+      console.error('Error creating request:', err);
+    }
+  };
+
+  const handleApproveRequest = async (requestId: string) => {
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.approveRequest(parseInt(requestId));
+      setSuccessMessage('Request approved successfully!');
+      fetchRequests(); // Refresh requests list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve request';
+      setErrorMessage(errorMessage);
+      console.error('Error approving request:', err);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.rejectRequest(parseInt(requestId));
+      setSuccessMessage('Request rejected successfully!');
+      fetchRequests(); // Refresh requests list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reject request';
+      setErrorMessage(errorMessage);
+      console.error('Error rejecting request:', err);
+    }
+  };
+
+  const handleIssueRequest = async (requestId: string) => {
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.issueRequest(parseInt(requestId));
+      setSuccessMessage('Item issued successfully!');
+      fetchRequests(); // Refresh requests list
+      fetchItems(); // Refresh items list to update quantities
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to issue item';
+      setErrorMessage(errorMessage);
+      console.error('Error issuing item:', err);
+    }
+  };
+
+  const handleReturnRequest = async (requestId: string) => {
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.returnRequest(parseInt(requestId));
+      setSuccessMessage('Item returned successfully!');
+      fetchRequests(); // Refresh requests list
+      fetchItems(); // Refresh items list to update quantities
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to return item';
+      setErrorMessage(errorMessage);
+      console.error('Error returning item:', err);
+    }
+  };
+
+  const getItemTypeIcon = (type: LocalStoreItem['type']) => {
     switch (type) {
       case 'consumable':
         return <Package className="w-4 h-4 text-orange-600" />;
@@ -173,13 +312,13 @@ const StoreManagerView: React.FC = () => {
     }
   };
 
-  const getStatusIcon = (status: ItemRequest['status']) => {
+  const getStatusIcon = (status: LocalItemRequest['status']) => {
     switch (status) {
       case 'pending':
         return <Clock className="w-4 h-4 text-yellow-600" />;
       case 'approved':
         return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'handed_over':
+      case 'issued':
         return <ArrowRight className="w-4 h-4 text-blue-600" />;
       case 'returned':
         return <ArrowLeft className="w-4 h-4 text-purple-600" />;
@@ -190,13 +329,13 @@ const StoreManagerView: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: ItemRequest['status']) => {
+  const getStatusColor = (status: LocalItemRequest['status']) => {
     switch (status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'approved':
         return 'bg-green-100 text-green-800';
-      case 'handed_over':
+      case 'issued':
         return 'bg-blue-100 text-blue-800';
       case 'returned':
         return 'bg-purple-100 text-purple-800';
@@ -207,7 +346,7 @@ const StoreManagerView: React.FC = () => {
     }
   };
 
-  const getCategoryLabel = (category: StoreItem['category']) => {
+  const getCategoryLabel = (category: LocalStoreItem['category']) => {
     switch (category) {
       case 'office_supplies':
         return 'Office Supplies';
@@ -226,7 +365,7 @@ const StoreManagerView: React.FC = () => {
     }
   };
 
-  const getItemTypeLabel = (type: StoreItem['type']) => {
+  const getItemTypeLabel = (type: LocalStoreItem['type']) => {
     switch (type) {
       case 'consumable':
         return 'Consumable';
@@ -249,61 +388,56 @@ const StoreManagerView: React.FC = () => {
     setReturnNotes('');
   };
 
-  const confirmHandover = () => {
+  const confirmHandover = async () => {
     if (!selectedRequest) return;
     
-    setRequests(requests.map(request => 
-      request.id === selectedRequest.id 
-        ? { 
-            ...request, 
-            status: 'handed_over', 
-            handoverDate: new Date().toISOString().split('T')[0],
-            handedOverBy: 'Store Manager',
-            notes: handoverNotes
-          }
-        : request
-    ));
-
-    // Update item quantity
-    setItems(items.map(item => 
-      item.id === selectedRequest.itemId 
-        ? { ...item, quantity: item.quantity - selectedRequest.quantity }
-        : item
-    ));
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.issueRequest(parseInt(selectedRequest.id));
+      setSuccessMessage('Item issued successfully!');
 
     setShowHandoverForm(false);
     setSelectedRequest(null);
     setHandoverNotes('');
+      
+      // Refresh data
+      fetchRequests();
+      fetchItems();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to issue item';
+      setErrorMessage(errorMessage);
+      console.error('Error issuing item:', err);
+    }
   };
 
-  const confirmReturn = () => {
+  const confirmReturn = async () => {
     if (!selectedRequest) return;
     
-    setRequests(requests.map(request => 
-      request.id === selectedRequest.id 
-        ? { 
-            ...request, 
-            status: 'returned', 
-            returnDate: new Date().toISOString().split('T')[0],
-            notes: returnNotes
-          }
-        : request
-    ));
-
-    // Update item quantity
-    setItems(items.map(item => 
-      item.id === selectedRequest.itemId 
-        ? { ...item, quantity: item.quantity + selectedRequest.quantity }
-        : item
-    ));
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.returnRequest(parseInt(selectedRequest.id));
+      setSuccessMessage('Item returned successfully!');
 
     setShowReturnForm(false);
     setSelectedRequest(null);
     setReturnNotes('');
+      
+      // Refresh data
+      fetchRequests();
+      fetchItems();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to return item';
+      setErrorMessage(errorMessage);
+      console.error('Error returning item:', err);
+    }
   };
 
   const approvedRequests = requests.filter(r => r.status === 'approved');
-  const handedOverRequests = requests.filter(r => r.status === 'handed_over' && r.itemType === 'non_consumable');
+  const issuedRequests = requests.filter(r => r.status === 'issued' && r.itemType === 'non_consumable');
   const pendingRequests = requests.filter(r => r.status === 'pending');
 
   return (
@@ -314,7 +448,51 @@ const StoreManagerView: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900">Store Manager Portal</h1>
           <p className="text-gray-600 mt-2">Manage inventory and item requests</p>
         </div>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowCreateItemForm(true)}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Item
+          </button>
+          <button
+            onClick={() => setShowCreateRequestForm(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <FileText className="w-4 h-4" />
+            Create Request
+          </button>
+        </div>
       </div>
+
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <p className="text-red-700 text-sm">{errorMessage}</p>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+          <p className="text-green-700 text-sm">{successMessage}</p>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="ml-auto text-green-500 hover:text-green-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -339,8 +517,8 @@ const StoreManagerView: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Handed Over</p>
-              <p className="text-2xl font-bold text-blue-600">{handedOverRequests.length}</p>
+              <p className="text-sm font-medium text-gray-600">Issued</p>
+              <p className="text-2xl font-bold text-blue-600">{issuedRequests.length}</p>
             </div>
             <ArrowRight className="w-8 h-8 text-blue-600" />
           </div>
@@ -397,6 +575,27 @@ const StoreManagerView: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900">Inventory Overview</h2>
           </div>
           <div className="overflow-x-auto">
+            {isLoadingItems ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                  <span className="text-gray-600">Loading items...</span>
+                </div>
+              </div>
+            ) : itemsError ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                  <span className="text-red-600">{itemsError}</span>
+                </div>
+              </div>
+            ) : items.length === 0 ? (
+              <div className="text-center py-12">
+                <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-sm">No items found</p>
+                <p className="text-gray-400 text-xs mt-1">Add your first item to get started</p>
+              </div>
+            ) : (
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -406,6 +605,7 @@ const StoreManagerView: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -441,10 +641,36 @@ const StoreManagerView: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {item.location}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedItem(item);
+                            setNewItem({
+                              name: item.name,
+                              description: item.description,
+                              is_consumable: item.type === 'consumable',
+                              quantity: item.quantity
+                            });
+                            setShowEditItemForm(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md text-xs font-medium transition-colors"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md text-xs font-medium transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            )}
           </div>
         </div>
       )}
@@ -508,7 +734,7 @@ const StoreManagerView: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div>Requested: {request.requestDate}</div>
                       {request.approvedDate && <div>Approved: {request.approvedDate}</div>}
-                      {request.handoverDate && <div>Handed: {request.handoverDate}</div>}
+                      {request.issuedDate && <div>Issued: {request.issuedDate}</div>}
                       {request.returnDate && <div>Returned: {request.returnDate}</div>}
                       {request.expectedReturnDate && (
                         <div className="text-blue-600">Expected: {request.expectedReturnDate}</div>
@@ -516,24 +742,37 @@ const StoreManagerView: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
+                        {request.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleApproveRequest(request.id)}
+                              className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md text-xs font-medium transition-colors"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleRejectRequest(request.id)}
+                              className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md text-xs font-medium transition-colors"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
                         {request.status === 'approved' && (
                           <button
-                            onClick={() => handleHandover(request.id)}
+                            onClick={() => handleIssueRequest(request.id)}
                             className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md text-xs font-medium transition-colors"
                           >
-                            Hand Over
+                            Issue
                           </button>
                         )}
-                        {request.status === 'handed_over' && request.itemType === 'non_consumable' && (
+                        {request.status === 'issued' && request.itemType === 'non_consumable' && (
                           <button
-                            onClick={() => handleReturn(request.id)}
+                            onClick={() => handleReturnRequest(request.id)}
                             className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md text-xs font-medium transition-colors"
                           >
                             Mark Returned
                           </button>
-                        )}
-                        {request.status === 'pending' && (
-                          <span className="text-gray-400 text-xs">Awaiting Approval</span>
                         )}
                         {request.status === 'returned' && (
                           <span className="text-purple-600 text-xs">Completed</span>
@@ -653,6 +892,207 @@ const StoreManagerView: React.FC = () => {
                 Confirm Return
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Item Modal */}
+      {showCreateItemForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative shadow-2xl">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Add New Item</h2>
+            <form onSubmit={handleCreateItem} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Item Name</label>
+                <input
+                  type="text"
+                  value={newItem.name}
+                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter item name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Enter item description"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                <select
+                  value={newItem.is_consumable ? 'consumable' : 'non_consumable'}
+                  onChange={(e) => setNewItem({ ...newItem, is_consumable: e.target.value === 'consumable' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  required
+                >
+                  <option value="consumable">Consumable</option>
+                  <option value="non_consumable">Non-Consumable</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                <input
+                  type="number"
+                  value={newItem.quantity}
+                  onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter quantity"
+                  required
+                  min="0"
+                />
+              </div>
+              <div className="flex items-center justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateItemForm(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  Create Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Item Modal */}
+      {showEditItemForm && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative shadow-2xl">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Edit Item</h2>
+            <form onSubmit={handleUpdateItem} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Item Name</label>
+                <input
+                  type="text"
+                  value={newItem.name}
+                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter item name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="Enter item description"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                <select
+                  value={newItem.is_consumable ? 'consumable' : 'non_consumable'}
+                  onChange={(e) => setNewItem({ ...newItem, is_consumable: e.target.value === 'consumable' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  required
+                >
+                  <option value="consumable">Consumable</option>
+                  <option value="non_consumable">Non-Consumable</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                <input
+                  type="number"
+                  value={newItem.quantity}
+                  onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter quantity"
+                  required
+                  min="0"
+                />
+              </div>
+              <div className="flex items-center justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditItemForm(false);
+                    setSelectedItem(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Update Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Request Modal */}
+      {showCreateRequestForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative shadow-2xl">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Create Request</h2>
+            <form onSubmit={handleCreateRequest} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Item</label>
+                <select
+                  value={newRequest.item_id}
+                  onChange={(e) => setNewRequest({ ...newRequest, item_id: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  required
+                >
+                  <option value={0}>Select an item</option>
+                  {items.map((item) => (
+                    <option key={item.id} value={parseInt(item.id)}>
+                      {item.name} ({item.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                <input
+                  type="number"
+                  value={newRequest.quantity}
+                  onChange={(e) => setNewRequest({ ...newRequest, quantity: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter quantity"
+                  required
+                  min="1"
+                />
+              </div>
+              <div className="flex items-center justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateRequestForm(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Create Request
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
