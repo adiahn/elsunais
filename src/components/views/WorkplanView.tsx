@@ -118,6 +118,17 @@ const WorkplanView: React.FC = () => {
         try {
           const workplans = await workplanService.getAllWorkplans();
           console.log('Workplan endpoint working, found workplans:', workplans.length);
+          
+          // Test project fetching for each workplan
+          for (const workplan of workplans) {
+            try {
+              console.log(`Testing project fetch for workplan ${workplan.id}...`);
+              const projects = await projectService.getProjectsByWorkplan(workplan.id);
+              console.log(`Workplan ${workplan.id} has ${projects.length} projects:`, projects);
+            } catch (projectError) {
+              console.error(`Error fetching projects for workplan ${workplan.id}:`, projectError);
+            }
+          }
         } catch (workplanError) {
           console.error('Workplan endpoint error:', workplanError);
         }
@@ -177,31 +188,21 @@ const WorkplanView: React.FC = () => {
               return {
                 ...workplan,
                 component: { id: 0, name: 'No Component' },
-          projects: []
+                projects: []
               };
             }
-            
-            // Add null check for component_id
-          if (!workplan.component_id) {
-            console.warn(`Workplan ${workplan.id} has no component_id`);
-            return {
-              ...workplan,
-              component: { id: 0, name: 'No Component' },
-              projects: []
-            };
-          }
           
           const component = apiComponents.find(comp => comp.id === workplan.component_id || comp.id === parseInt(workplan.component_id.toString()));
             console.log(`Found component for workplan ${workplan.id}:`, component);
             
             let projects: Project[] = [];
             
-            if (component) {
-              try {
-                projects = await projectService.getProjectsByComponent(component.id);
-      } catch (err) {
-                console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
-              }
+            try {
+              console.log(`Fetching projects for workplan ${workplan.id}...`);
+              projects = await projectService.getProjectsByWorkplan(workplan.id);
+              console.log(`Found ${projects.length} projects for workplan ${workplan.id}:`, projects);
+            } catch (err) {
+              console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
             }
             
             return {
@@ -336,13 +337,11 @@ const WorkplanView: React.FC = () => {
           const component = apiComponents.find(comp => comp.id === workplan.component_id || comp.id === parseInt(workplan.component_id.toString()));
           let projects: Project[] = [];
           
-          if (component) {
             try {
-              projects = await projectService.getProjectsByComponent(component.id);
+              projects = await projectService.getProjectsByWorkplan(workplan.id);
             } catch (err) {
               console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
             }
-          }
           
           return {
             ...workplan,
@@ -380,6 +379,7 @@ const WorkplanView: React.FC = () => {
       
       const projectData = {
         title: newProject.title,
+        workplan_id: selectedWorkplan!.id,
         sub_component_id: newProject.sub_component_id,
         component_id: parseInt(selectedComponent.id),
         project_info: newProject.project_info
@@ -389,7 +389,7 @@ const WorkplanView: React.FC = () => {
       
       // Refresh the workplan's projects
       if (selectedWorkplan) {
-        const updatedProjects = await projectService.getProjectsByComponent(selectedWorkplan.component.id);
+        const updatedProjects = await projectService.getProjectsByWorkplan(selectedWorkplan.id);
         const updatedWorkplan = {
           ...selectedWorkplan,
           projects: updatedProjects

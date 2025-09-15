@@ -4,15 +4,19 @@ import { apiClient } from '../config/api';
 export interface Project {
   id: number;
   title: string;
+  workplan_id: number;
   sub_component_id: number;
   component_id: number;
+  created_by_id?: number;
+  updated_by_id?: number;
+  date_created?: string;
+  date_updated?: string;
   project_info: Record<string, any>;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface CreateProjectRequest {
   title: string;
+  workplan_id: number;
   sub_component_id: number;
   component_id: number;
   project_info: Record<string, any>;
@@ -59,6 +63,53 @@ class ProjectService {
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Failed to create project. Please try again.';
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Get projects by workplan ID
+   */
+  async getProjectsByWorkplan(workplanId: number): Promise<Project[]> {
+    try {
+      console.log(`API: Fetching projects for workplan ${workplanId}...`);
+      const response = await apiClient.get<Project[] | ProjectListResponse>(`/projects?workplan_id=${workplanId}`);
+      console.log(`API: Raw response for workplan ${workplanId}:`, response.data);
+      
+      // Handle both response formats
+      if (Array.isArray(response.data)) {
+        console.log(`API: Found ${response.data.length} projects (direct array)`);
+        return response.data;
+      } else if (response.data && 'projects' in response.data) {
+        console.log(`API: Found ${response.data.projects?.length || 0} projects (wrapped)`);
+        return response.data.projects || [];
+      } else {
+        console.log(`API: Unexpected response format for workplan ${workplanId}`);
+        return [];
+      }
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as any;
+        const status = axiosError.response?.status;
+        const message = axiosError.response?.data?.message || axiosError.response?.data?.error;
+        
+        if (status === 401) {
+          throw new Error('Unauthorized. Please log in again.');
+        } else if (status === 500) {
+          throw new Error('Server error. Please try again later.');
+        } else if (status >= 500) {
+          throw new Error('Server is temporarily unavailable. Please try again later.');
+        } else if (status === 0 || !status) {
+          throw new Error('Network error. Please check your internet connection.');
+        } else {
+          throw new Error(message || 'Failed to fetch projects. Please try again.');
+        }
+      }
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to fetch projects. Please try again.';
       
       throw new Error(errorMessage);
     }
