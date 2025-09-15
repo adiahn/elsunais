@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, Users, Search, Eye, DollarSign, Building, ArrowLeft, Activity, FileText, MessageSquare, Settings, Edit, Download, ChevronDown, ChevronRight, Loader2, AlertCircle, X } from 'lucide-react';
+import { Plus, Calendar, Users, Search, Eye, DollarSign, Building, ArrowLeft, Activity, FileText, MessageSquare, Settings, Edit, Download, Loader2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { componentService, Component as ApiComponent } from '../../services/componentService';
+import { subComponentService, SubComponent } from '../../services/subComponentService';
+import { projectService, Project } from '../../services/projectService';
+import { workplanService, Workplan } from '../../services/workplanService';
 
 interface Activity {
   id: string;
@@ -10,26 +13,15 @@ interface Activity {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
-interface Project {
-  id: string;
-  name: string;
-  projectId: string; // A1, A2, A3, etc.
-  fileNo: string;
-  expectedStartDate: string;
-  expectedEndDate: string;
-  idaFunding: number;
-  gcfFunding: number;
-  leadImplementation: string;
-  partners: string;
-  procurementMethod: string;
-  status: 'completed' | 'in_progress' | 'approved';
-  activities: Activity[];
-}
-
-interface Component {
+interface WorkplanComponent {
   id: string;
   name: string;
   componentId: string; // A, B, C, etc.
+  projects: Project[];
+}
+
+interface WorkplanWithComponent extends Workplan {
+  component: ApiComponent;
   projects: Project[];
 }
 
@@ -45,35 +37,56 @@ interface ActivityLog {
 
 
 const WorkplanView: React.FC = () => {
-  const [components, setComponents] = useState<Component[]>([]);
+  const [workplans, setWorkplans] = useState<WorkplanWithComponent[]>([]);
   
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreateWorkplanForm, setShowCreateWorkplanForm] = useState(false);
   const [showCreateProjectForm, setShowCreateProjectForm] = useState(false);
   const [showCreateActivityForm, setShowCreateActivityForm] = useState(false);
-  const [selectedComponent, setSelectedComponent] = useState<Component | null>(null);
+  const [selectedWorkplan, setSelectedWorkplan] = useState<WorkplanWithComponent | null>(null);
+  const [selectedComponent, setSelectedComponent] = useState<WorkplanComponent | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'documents' | 'settings'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set());
-  const [newComponent, setNewComponent] = useState<Omit<Component, 'id'>>({
-    name: '',
-    componentId: '',
-    projects: []
+  const [availableSubComponents, setAvailableSubComponents] = useState<SubComponent[]>([]);
+  const [expandedWorkplans, setExpandedWorkplans] = useState<Set<string>>(new Set());
+  const [newWorkplan, setNewWorkplan] = useState<{
+    title: string;
+    component_id: number;
+  }>({
+    title: '',
+    component_id: 0
   });
-  const [newProject, setNewProject] = useState<Omit<Project, 'id'>>({
-    name: '',
-    projectId: '',
-    fileNo: '',
-    expectedStartDate: '',
-    expectedEndDate: '',
-    idaFunding: 0,
-    gcfFunding: 0,
-    leadImplementation: '',
+  const [newProject, setNewProject] = useState<{
+    title: string;
+    sub_component_id: number;
+    component_id: number;
+    project_info: {
+      file_no: string;
+      expected_start_date: string;
+      expected_end_date: string;
+      ida_funding: number;
+      gcf_funding: number;
+      lead_implementation: string;
+      partners: string;
+      procurement_method: string;
+      status: string;
+    };
+  }>({
+    title: '',
+    sub_component_id: 0,
+    component_id: 0,
+    project_info: {
+      file_no: '',
+      expected_start_date: '',
+      expected_end_date: '',
+      ida_funding: 0,
+      gcf_funding: 0,
+      lead_implementation: '',
     partners: '',
-    procurementMethod: '',
-    status: 'in_progress',
-    activities: []
+      procurement_method: '',
+      status: 'in_progress'
+    }
   });
   const [newActivity, setNewActivity] = useState<Omit<Activity, 'id'>>({
     name: '',
@@ -87,20 +100,48 @@ const WorkplanView: React.FC = () => {
   // Debug modal states
   useEffect(() => {
     console.log('Modal states:', {
-      showCreateForm,
+      showCreateWorkplanForm,
       showCreateProjectForm,
       showCreateActivityForm
     });
-  }, [showCreateForm, showCreateProjectForm, showCreateActivityForm]);
+  }, [showCreateWorkplanForm, showCreateProjectForm, showCreateActivityForm]);
+
+  // Test API connection on mount
+  useEffect(() => {
+    const testApiConnection = async () => {
+      try {
+        console.log('Testing API connection...');
+        const components = await componentService.getComponents();
+        console.log('API connection successful, found components:', components.length);
+        
+        // Test workplan endpoint
+        try {
+          const workplans = await workplanService.getAllWorkplans();
+          console.log('Workplan endpoint working, found workplans:', workplans.length);
+        } catch (workplanError) {
+          console.error('Workplan endpoint error:', workplanError);
+        }
+      } catch (error) {
+        console.error('API connection failed:', error);
+      }
+    };
+    
+    testApiConnection();
+  }, []);
+
 
   // State for API components
   const [availableComponents, setAvailableComponents] = useState<ApiComponent[]>([]);
   const [isLoadingComponents, setIsLoadingComponents] = useState(false);
+  const [, setIsLoadingSubComponents] = useState(false);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [componentsError, setComponentsError] = useState<string | null>(null);
+  const [, setSubComponentsError] = useState<string | null>(null);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
 
-  // Fetch components from API on mount
+  // Fetch workplans from API on mount
   useEffect(() => {
-    const fetchComponents = async () => {
+    const fetchWorkplans = async () => {
       try {
         setIsLoadingComponents(true);
         setComponentsError(null);
@@ -108,49 +149,100 @@ const WorkplanView: React.FC = () => {
         // Check if user is authenticated
         const token = localStorage.getItem('authToken');
         if (!token) {
-          setComponentsError('Please log in to view components');
+          setComponentsError('Please log in to view workplans');
           return;
         }
         
+        const apiWorkplans = await workplanService.getAllWorkplans();
         const apiComponents = await componentService.getComponents();
         setAvailableComponents(apiComponents);
         
-        // Convert API components to workplan components format
-        const workplanComponents: Component[] = apiComponents.map((apiComp, index) => ({
-          id: apiComp.id.toString(),
-          name: apiComp.name,
-          componentId: String.fromCharCode(65 + index), // A, B, C, D, etc.
-          projects: []
-        }));
         
-        setComponents(workplanComponents);
+        // Check if workplans is valid array
+        if (!Array.isArray(apiWorkplans)) {
+          console.error('API returned invalid workplans data:', apiWorkplans);
+          setComponentsError('Invalid workplans data received from API');
+          return;
+        }
+        
+        // Convert API workplans to workplan with component format and fetch their projects
+        const workplansWithComponents: WorkplanWithComponent[] = await Promise.all(
+          apiWorkplans.map(async (workplan) => {
+            console.log(`Looking for component with ID: ${workplan.component_id} (type: ${typeof workplan.component_id})`);
+            console.log('Available components:', apiComponents.map(c => ({ id: c.id, name: c.name, type: typeof c.id })));
+            
+            // Add null check for component_id
+            if (!workplan.component_id) {
+              console.warn(`Workplan ${workplan.id} has no component_id`);
+              return {
+                ...workplan,
+                component: { id: 0, name: 'No Component' },
+          projects: []
+              };
+            }
+            
+            // Add null check for component_id
+          if (!workplan.component_id) {
+            console.warn(`Workplan ${workplan.id} has no component_id`);
+            return {
+              ...workplan,
+              component: { id: 0, name: 'No Component' },
+              projects: []
+            };
+          }
+          
+          const component = apiComponents.find(comp => comp.id === workplan.component_id || comp.id === parseInt(workplan.component_id.toString()));
+            console.log(`Found component for workplan ${workplan.id}:`, component);
+            
+            let projects: Project[] = [];
+            
+            if (component) {
+              try {
+                projects = await projectService.getProjectsByComponent(component.id);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load components';
+                console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
+              }
+            }
+            
+            return {
+              ...workplan,
+              component: component || { id: 0, name: 'Unknown Component' },
+              projects
+            };
+          })
+        );
+        
+        console.log('Initial workplans fetch - Final workplans with components:', workplansWithComponents);
+        setWorkplans(workplansWithComponents);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load workplans';
         setComponentsError(errorMessage);
-        console.error('Error fetching components:', err);
+        console.error('Error fetching workplans:', err);
       } finally {
         setIsLoadingComponents(false);
       }
     };
 
-    fetchComponents();
+    fetchWorkplans();
   }, []);
 
-  const subComponentOptions = {
-    'A': ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10'],
-    'B': ['B1', 'B2', 'B3', 'B4', 'B5'],
-    'C': ['C1', 'C2', 'C3', 'C4', 'C5'],
-    'D': ['D1', 'D2', 'D3', 'D4', 'D5']
+  // Fetch sub-components when a component is selected
+  const fetchSubComponents = async (componentId: number) => {
+    try {
+      setIsLoadingSubComponents(true);
+      setSubComponentsError(null);
+      
+      const subComponents = await subComponentService.getSubComponentsByComponent(componentId);
+      setAvailableSubComponents(subComponents);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load sub-components';
+      setSubComponentsError(errorMessage);
+      console.error('Error fetching sub-components:', err);
+    } finally {
+      setIsLoadingSubComponents(false);
+    }
   };
 
-  const procurementMethods = [
-    'Open Tender',
-    'Restricted Tender',
-    'Direct Procurement',
-    'Framework Agreement',
-    'Request for Quotation',
-    'Single Source'
-  ];
 
   const mockActivities: ActivityLog[] = [
     {
@@ -187,87 +279,165 @@ const WorkplanView: React.FC = () => {
     }
   ];
 
-  const handleCreateComponent = (e: React.FormEvent) => {
+  const handleCreateWorkplan = async (e: React.FormEvent) => {
     e.preventDefault();
-    const component: Component = {
-      ...newComponent,
-      id: Date.now().toString()
-    };
-    setComponents([...components, component]);
-    setNewComponent({
-      name: '',
-      componentId: '',
+    
+    console.log('Creating workplan with data:', newWorkplan);
+    
+    // Validate form data
+    if (!newWorkplan.title.trim()) {
+      setProjectsError('Workplan title is required');
+      return;
+    }
+    
+    if (!newWorkplan.component_id || newWorkplan.component_id === 0) {
+      setProjectsError('Please select a component');
+      return;
+    }
+    
+    try {
+      setIsLoadingProjects(true);
+      setProjectsError(null);
+      
+      const workplanData = {
+        title: newWorkplan.title.trim(),
+        component_id: newWorkplan.component_id
+      };
+      
+      console.log('Sending workplan data:', workplanData);
+      
+      const response = await workplanService.createWorkplan(workplanData);
+      console.log('Workplan created successfully:', response);
+      
+      // Refresh workplans after successful creation
+      console.log('Refreshing workplans after creation...');
+      const apiWorkplans = await workplanService.getAllWorkplans();
+      const apiComponents = await componentService.getComponents();
+      
+      // Check if workplans is valid array
+      if (!Array.isArray(apiWorkplans)) {
+        console.error('API returned invalid workplans data after creation:', apiWorkplans);
+        setProjectsError('Failed to refresh workplans after creation');
+        return;
+      }
+      
+      const workplansWithComponents: WorkplanWithComponent[] = await Promise.all(
+        apiWorkplans.map(async (workplan) => {
+          // Add null check for component_id
+          if (!workplan.component_id) {
+            console.warn(`Workplan ${workplan.id} has no component_id`);
+            return {
+              ...workplan,
+              component: { id: 0, name: 'No Component' },
       projects: []
-    });
-    setShowCreateForm(false);
+            };
+          }
+          
+          const component = apiComponents.find(comp => comp.id === workplan.component_id || comp.id === parseInt(workplan.component_id.toString()));
+          let projects: Project[] = [];
+          
+          if (component) {
+            try {
+              projects = await projectService.getProjectsByComponent(component.id);
+            } catch (err) {
+              console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
+            }
+          }
+          
+          return {
+            ...workplan,
+            component: component || { id: 0, name: 'Unknown Component' },
+            projects
+          };
+        })
+      );
+      
+      console.log('Updated workplans list:', workplansWithComponents);
+      setWorkplans(workplansWithComponents);
+      
+      // Reset form
+      setNewWorkplan({
+        title: '',
+        component_id: 0
+      });
+      setShowCreateWorkplanForm(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create workplan';
+      setProjectsError(errorMessage);
+      console.error('Error creating workplan:', err);
+    } finally {
+      setIsLoadingProjects(false);
+    }
   };
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedComponent) return;
     
-    const project: Project = {
-      ...newProject,
-      id: Date.now().toString(),
-      fileNo: newProject.fileNo || ''
-    };
-    
-    const updatedComponent = {
-      ...selectedComponent,
-      projects: [...selectedComponent.projects, project]
-    };
-    
-    setComponents(components.map(comp => 
-      comp.id === selectedComponent.id ? updatedComponent : comp
-    ));
-    setSelectedComponent(updatedComponent);
-    
+    try {
+      setIsLoadingProjects(true);
+      setProjectsError(null);
+      
+      const projectData = {
+        title: newProject.title,
+        sub_component_id: newProject.sub_component_id,
+        component_id: parseInt(selectedComponent.id),
+        project_info: newProject.project_info
+      };
+      
+      await projectService.createProject(projectData);
+      
+      // Refresh the workplan's projects
+      if (selectedWorkplan) {
+        const updatedProjects = await projectService.getProjectsByComponent(selectedWorkplan.component.id);
+        const updatedWorkplan = {
+          ...selectedWorkplan,
+          projects: updatedProjects
+        };
+        
+        setWorkplans(workplans.map(wp => 
+          wp.id === selectedWorkplan.id ? updatedWorkplan : wp
+        ));
+        setSelectedWorkplan(updatedWorkplan);
+        setSelectedComponent({
+          ...selectedComponent,
+          projects: updatedProjects
+        });
+      }
+      
+      // Reset form
     setNewProject({
-      name: '',
-      projectId: '',
-      fileNo: '',
-      expectedStartDate: '',
-      expectedEndDate: '',
-      idaFunding: 0,
-      gcfFunding: 0,
-      leadImplementation: '',
+        title: '',
+        sub_component_id: 0,
+        component_id: parseInt(selectedComponent.id),
+        project_info: {
+          file_no: '',
+          expected_start_date: '',
+          expected_end_date: '',
+          ida_funding: 0,
+          gcf_funding: 0,
+          lead_implementation: '',
       partners: '',
-      procurementMethod: '',
-      status: 'in_progress',
-      activities: []
+          procurement_method: '',
+          status: 'in_progress'
+        }
     });
     setShowCreateProjectForm(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create project';
+      setProjectsError(errorMessage);
+      console.error('Error creating project:', err);
+    } finally {
+      setIsLoadingProjects(false);
+    }
   };
 
   const handleCreateActivity = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
     
-    const activity: Activity = {
-      ...newActivity,
-      id: Date.now().toString()
-    };
-    
-    const updatedProject = {
-      ...selectedProject,
-      activities: [...selectedProject.activities, activity]
-    };
-    
-    // Update the project in the selected component
-    if (selectedComponent) {
-      const updatedComponent = {
-        ...selectedComponent,
-        projects: selectedComponent.projects.map(proj => 
-          proj.id === selectedProject.id ? updatedProject : proj
-        )
-      };
-      
-      setComponents(components.map(comp => 
-        comp.id === selectedComponent.id ? updatedComponent : comp
-      ));
-      setSelectedComponent(updatedComponent);
-      setSelectedProject(updatedProject);
-    }
+    // For now, we'll just show a success message since activities are not part of the API yet
+    alert('Activity creation will be implemented when the activities API is available');
     
     setNewActivity({
       name: '',
@@ -278,27 +448,51 @@ const WorkplanView: React.FC = () => {
     setShowCreateActivityForm(false);
   };
 
-  const handleViewDetails = (component: Component, project?: Project) => {
-    setSelectedComponent(component);
-    setSelectedProject(project || null);
+  const handleViewWorkplanDetails = async (workplan: WorkplanWithComponent) => {
+    setSelectedWorkplan(workplan);
+    setSelectedComponent({
+      id: workplan.component.id.toString(),
+      name: workplan.component.name,
+      componentId: String.fromCharCode(65 + workplan.component.id - 1), // A, B, C, etc.
+      projects: workplan.projects
+    });
+    setSelectedProject(null);
+    setActiveTab('overview');
+    
+    // Fetch sub-components for this component
+    await fetchSubComponents(workplan.component.id);
+    
+    // Set the component_id in the new project form
+    setNewProject(prev => ({
+      ...prev,
+      component_id: workplan.component.id
+    }));
+  };
+
+  const handleViewProjectDetails = async (project: Project) => {
+    if (!selectedWorkplan) return;
+    
+    setSelectedProject(project);
     setActiveTab('overview');
   };
 
   const handleBackToList = () => {
+    setSelectedWorkplan(null);
     setSelectedComponent(null);
     setSelectedProject(null);
     setActiveTab('overview');
   };
 
-  const toggleComponentExpansion = (componentId: string) => {
-    const newExpanded = new Set(expandedComponents);
-    if (newExpanded.has(componentId)) {
-      newExpanded.delete(componentId);
+  const toggleWorkplanExpansion = (workplanId: string) => {
+    const newExpanded = new Set(expandedWorkplans);
+    if (newExpanded.has(workplanId)) {
+      newExpanded.delete(workplanId);
     } else {
-      newExpanded.add(componentId);
+      newExpanded.add(workplanId);
     }
-    setExpandedComponents(newExpanded);
+    setExpandedWorkplans(newExpanded);
   };
+
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-US', {
@@ -313,23 +507,53 @@ const WorkplanView: React.FC = () => {
     return ida + gcf;
   };
 
-  const getComponentTotalFunding = (component: Component) => {
-    return component.projects.reduce((total, project) => {
-      return total + getTotalFunding(project.idaFunding, project.gcfFunding);
+  const getWorkplanTotalFunding = (workplan: WorkplanWithComponent) => {
+    return workplan.projects.reduce((total, project) => {
+      const idaFunding = project.project_info.ida_funding || 0;
+      const gcfFunding = project.project_info.gcf_funding || 0;
+      return total + getTotalFunding(idaFunding, gcfFunding);
     }, 0);
   };
 
-  const filteredComponents = components.filter(component => {
-    const matchesSearch = component.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      component.projects.some(project => 
-        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.projectId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.leadImplementation.toLowerCase().includes(searchTerm.toLowerCase())
+  const getWorkplanAggregatedData = (workplan: WorkplanWithComponent) => {
+    if (workplan.projects.length === 0) {
+      return {
+        subComponent: 'No Projects',
+        procurementMethod: 'N/A',
+        status: 'N/A',
+        idaFunding: 0,
+        gcfFunding: 0,
+        totalFunding: 0
+      };
+    }
+
+    // Get the first project's data as representative
+    const firstProject = workplan.projects[0];
+    const subComponent = availableSubComponents.find(sub => sub.id === firstProject.sub_component_id)?.title || 'Unknown';
+    
+    return {
+      subComponent,
+      procurementMethod: firstProject.project_info.procurement_method || 'N/A',
+      status: firstProject.project_info.status || 'N/A',
+      idaFunding: workplan.projects.reduce((total, p) => total + (p.project_info.ida_funding || 0), 0),
+      gcfFunding: workplan.projects.reduce((total, p) => total + (p.project_info.gcf_funding || 0), 0),
+      totalFunding: getWorkplanTotalFunding(workplan)
+    };
+  };
+
+  const filteredWorkplans = workplans.filter(workplan => {
+    const matchesSearch = workplan.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workplan.component.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workplan.projects.some(project => 
+        project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (project.project_info.lead_implementation || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     
     if (!statusFilter) return matchesSearch;
     
-    const hasMatchingStatus = component.projects.some(project => project.status === statusFilter);
+    const hasMatchingStatus = workplan.projects.some(project => 
+      (project.project_info.status || '').toLowerCase() === statusFilter.toLowerCase()
+    );
     return matchesSearch && hasMatchingStatus;
   });
 
@@ -352,8 +576,8 @@ const WorkplanView: React.FC = () => {
 
 
 
-  // Show component/project details view
-  if (selectedComponent) {
+  // Show workplan/component/project details view
+  if (selectedWorkplan) {
     const isProjectView = selectedProject !== null;
 
     return (
@@ -370,10 +594,10 @@ const WorkplanView: React.FC = () => {
               </button>
               <div>
                 <h1 className="text-2xl font-semibold text-gray-800">
-                  {isProjectView ? `${selectedComponent.name} - ${selectedProject.name}` : selectedComponent.name}
+                  {isProjectView ? `${selectedWorkplan.title} - ${selectedProject?.title}` : `${selectedWorkplan.title} - ${selectedComponent?.name}`}
                 </h1>
                 <p className="text-gray-600">
-                  {isProjectView ? 'Project Details' : 'Component Overview'}
+                  {isProjectView ? 'Project Details' : 'Workplan Overview'}
                 </p>
               </div>
             </div>
@@ -429,10 +653,18 @@ const WorkplanView: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-4">
                         <div>
-                          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Project ID</h3>
+                          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Project Title</h3>
                           <p className="text-lg font-semibold text-gray-800 flex items-center">
                             <Building className="w-5 h-5 mr-2 text-blue-600" />
-                            {selectedProject.projectId}
+                            {selectedProject.title}
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">File No</h3>
+                          <p className="text-lg text-gray-800 flex items-center">
+                            <FileText className="w-5 h-5 mr-2 text-green-600" />
+                            {selectedProject.project_info.file_no || 'N/A'}
                           </p>
                         </div>
                         
@@ -440,7 +672,7 @@ const WorkplanView: React.FC = () => {
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Expected Start Date</h3>
                           <p className="text-lg text-gray-800 flex items-center">
                             <Calendar className="w-5 h-5 mr-2 text-green-600" />
-                            {selectedProject.expectedStartDate}
+                            {selectedProject.project_info.expected_start_date || 'N/A'}
                           </p>
                         </div>
 
@@ -448,7 +680,7 @@ const WorkplanView: React.FC = () => {
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Expected End Date</h3>
                           <p className="text-lg text-gray-800 flex items-center">
                             <Calendar className="w-5 h-5 mr-2 text-green-600" />
-                            {selectedProject.expectedEndDate}
+                            {selectedProject.project_info.expected_end_date || 'N/A'}
                           </p>
                         </div>
                       </div>
@@ -457,22 +689,22 @@ const WorkplanView: React.FC = () => {
                         <div>
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">IDA</h3>
                           <p className={`text-lg font-semibold flex items-center ${
-                            selectedProject.idaFunding > 0 ? 'text-green-600' : 'text-gray-400'
+                            (selectedProject.project_info.ida_funding || 0) > 0 ? 'text-green-600' : 'text-gray-400'
                           }`}>
                             <DollarSign className="w-5 h-5 mr-2" />
-                            {formatCurrency(selectedProject.idaFunding)}
-                            {selectedProject.idaFunding === 0 && <span className="text-sm font-normal ml-2">(No contribution)</span>}
+                            {formatCurrency(selectedProject.project_info.ida_funding || 0)}
+                            {(selectedProject.project_info.ida_funding || 0) === 0 && <span className="text-sm font-normal ml-2">(No contribution)</span>}
                           </p>
                         </div>
 
                         <div>
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">GCF</h3>
                           <p className={`text-lg font-semibold flex items-center ${
-                            selectedProject.gcfFunding > 0 ? 'text-blue-600' : 'text-gray-400'
+                            (selectedProject.project_info.gcf_funding || 0) > 0 ? 'text-blue-600' : 'text-gray-400'
                           }`}>
                             <DollarSign className="w-5 h-5 mr-2" />
-                            {formatCurrency(selectedProject.gcfFunding)}
-                            {selectedProject.gcfFunding === 0 && <span className="text-sm font-normal ml-2">(No contribution)</span>}
+                            {formatCurrency(selectedProject.project_info.gcf_funding || 0)}
+                            {(selectedProject.project_info.gcf_funding || 0) === 0 && <span className="text-sm font-normal ml-2">(No contribution)</span>}
                           </p>
                         </div>
 
@@ -480,7 +712,7 @@ const WorkplanView: React.FC = () => {
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Total Funding</h3>
                           <p className="text-lg font-bold text-gray-800 flex items-center">
                             <DollarSign className="w-5 h-5 mr-2 text-purple-600" />
-                            {formatCurrency(getTotalFunding(selectedProject.idaFunding, selectedProject.gcfFunding))}
+                            {formatCurrency(getTotalFunding(selectedProject.project_info.ida_funding || 0, selectedProject.project_info.gcf_funding || 0))}
                           </p>
                         </div>
 
@@ -488,7 +720,7 @@ const WorkplanView: React.FC = () => {
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Lead Implementation</h3>
                           <p className="text-lg text-gray-800 flex items-center">
                             <Users className="w-5 h-5 mr-2 text-purple-600" />
-                            {selectedProject.leadImplementation}
+                            {selectedProject.project_info.lead_implementation || 'N/A'}
                           </p>
                         </div>
 
@@ -496,23 +728,23 @@ const WorkplanView: React.FC = () => {
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Partners</h3>
                           <p className="text-lg text-gray-800 flex items-center">
                             <Building className="w-5 h-5 mr-2 text-orange-600" />
-                            {selectedProject.partners}
+                            {selectedProject.project_info.partners || 'N/A'}
                           </p>
                         </div>
 
                         <div>
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Procurement Method</h3>
-                          <p className="text-lg text-gray-800">{selectedProject.procurementMethod}</p>
+                          <p className="text-lg text-gray-800">{selectedProject.project_info.procurement_method || 'N/A'}</p>
                         </div>
 
                         <div>
                           <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Status</h3>
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                            selectedProject.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            selectedProject.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                            selectedProject.project_info.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            selectedProject.project_info.status === 'approved' ? 'bg-blue-100 text-blue-800' :
                             'bg-yellow-100 text-yellow-800'
                           }`}>
-                            {selectedProject.status.replace('_', ' ')}
+                            {(selectedProject.project_info.status || 'in_progress').replace('_', ' ')}
                           </span>
                         </div>
                       </div>
@@ -522,7 +754,7 @@ const WorkplanView: React.FC = () => {
                     <div className="space-y-6">
                       <div>
                         <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Component Name</h3>
-                        <p className="text-lg font-semibold text-gray-800">{selectedComponent.name}</p>
+                        <p className="text-lg font-semibold text-gray-800">{selectedComponent?.name}</p>
                       </div>
                       
                       <div>
@@ -540,15 +772,15 @@ const WorkplanView: React.FC = () => {
                           </button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {selectedComponent.projects.map((project) => (
+                          {selectedComponent?.projects?.map((project) => (
                             <div key={project.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                               <div className="flex items-center justify-between mb-3">
                                 <h4 className="font-semibold text-gray-800 flex items-center">
                                   <Building className="w-4 h-4 mr-2 text-blue-600" />
-                                  {project.projectId}
+                                  {project.title}
                                 </h4>
                                 <button
-                                  onClick={() => handleViewDetails(selectedComponent, project)}
+                                  onClick={() => handleViewProjectDetails(project)}
                                   className="text-green-600 hover:text-green-700 text-sm font-medium"
                                 >
                                   View Details →
@@ -556,35 +788,35 @@ const WorkplanView: React.FC = () => {
                               </div>
                               <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
-                                  <span className="text-gray-600">Name:</span>
-                                  <span className="font-medium text-gray-800">{project.name}</span>
+                                  <span className="text-gray-600">File No:</span>
+                                  <span className="font-medium text-gray-800">{project.project_info.file_no || 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-gray-600">IDA:</span>
-                                  <span className={`font-medium ${project.idaFunding > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                                    {formatCurrency(project.idaFunding)}
+                                  <span className={`font-medium ${(project.project_info.ida_funding || 0) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                    {formatCurrency(project.project_info.ida_funding || 0)}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-gray-600">GCF:</span>
-                                  <span className={`font-medium ${project.gcfFunding > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                    {formatCurrency(project.gcfFunding)}
+                                  <span className={`font-medium ${(project.project_info.gcf_funding || 0) > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                                    {formatCurrency(project.project_info.gcf_funding || 0)}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-gray-600">Total:</span>
                                   <span className="font-bold text-gray-800">
-                                    {formatCurrency(getTotalFunding(project.idaFunding, project.gcfFunding))}
+                                    {formatCurrency(getTotalFunding(project.project_info.ida_funding || 0, project.project_info.gcf_funding || 0))}
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-200">
                                   <span className="text-gray-600">Status:</span>
                                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                    project.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                    project.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                                    project.project_info.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                    project.project_info.status === 'approved' ? 'bg-blue-100 text-blue-800' :
                                     'bg-yellow-100 text-yellow-800'
                                   }`}>
-                                    {project.status.replace('_', ' ')}
+                                    {(project.project_info.status || 'in_progress').replace('_', ' ')}
                                   </span>
                                 </div>
                               </div>
@@ -606,44 +838,44 @@ const WorkplanView: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">Total Projects:</span>
                       <span className="font-semibold text-gray-800">
-                        {isProjectView ? selectedComponent.projects.length : components.reduce((total, comp) => total + comp.projects.length, 0)}
+                        {isProjectView ? selectedComponent?.projects.length || 0 : selectedWorkplan?.projects.length || 0}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">Total Funding:</span>
                       <span className="font-semibold text-gray-800">
                         {isProjectView 
-                          ? formatCurrency(getTotalFunding(selectedProject.idaFunding, selectedProject.gcfFunding))
-                          : formatCurrency(components.reduce((total, comp) => total + getComponentTotalFunding(comp), 0))
+                          ? formatCurrency(getTotalFunding(selectedProject?.project_info.ida_funding || 0, selectedProject?.project_info.gcf_funding || 0))
+                          : formatCurrency(getWorkplanTotalFunding(selectedWorkplan!))
                         }
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">Activities:</span>
                       <span className="font-semibold text-gray-800">
-                        {isProjectView ? selectedProject.activities.length : 'N/A'}
+                        {isProjectView ? 'N/A' : 'N/A'}
                       </span>
                     </div>
-                    {!isProjectView && (
+                    {!isProjectView && selectedWorkplan && (
                       <div className="pt-4 border-t border-gray-200">
                         <h4 className="text-sm font-medium text-gray-700 mb-2">Status Distribution</h4>
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-gray-600">In Progress:</span>
                             <span className="text-xs font-medium text-yellow-600">
-                              {components.reduce((total, comp) => total + comp.projects.filter(p => p.status === 'in_progress').length, 0)}
+                              {selectedWorkplan.projects.filter(p => p.project_info.status === 'in_progress').length}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-gray-600">Completed:</span>
                             <span className="text-xs font-medium text-green-600">
-                              {components.reduce((total, comp) => total + comp.projects.filter(p => p.status === 'completed').length, 0)}
+                              {selectedWorkplan.projects.filter(p => p.project_info.status === 'completed').length}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-gray-600">Approved:</span>
                             <span className="text-xs font-medium text-blue-600">
-                              {components.reduce((total, comp) => total + comp.projects.filter(p => p.status === 'approved').length, 0)}
+                              {selectedWorkplan.projects.filter(p => p.project_info.status === 'approved').length}
                             </span>
                           </div>
                         </div>
@@ -694,28 +926,11 @@ const WorkplanView: React.FC = () => {
                 )}
               </div>
               <div className="space-y-4">
-                {isProjectView && selectedProject ? (
-                  selectedProject.activities.map((activity) => (
-                    <div key={activity.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold text-gray-800">{activity.name}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          activity.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          activity.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {activity.status.replace('_', ' ')}
-                        </span>
+                <div className="text-center py-8">
+                  <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No activities available</p>
+                  <p className="text-sm text-gray-400 mt-1">Activities will be implemented when the API is available</p>
                       </div>
-                      <p className="text-gray-600 mb-2">{activity.description}</p>
-                      <p className="text-sm text-gray-500">Date: {activity.date}</p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500">
-                    {isProjectView ? 'No activities found for this project.' : 'Select a project to view its activities.'}
-                  </p>
-                )}
               </div>
             </div>
           )}
@@ -743,12 +958,12 @@ const WorkplanView: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Project Name
+                      Project Title
                     </label>
                     <input
                       type="text"
-                      value={newProject.name}
-                      onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                      value={newProject.title}
+                      onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     />
@@ -759,8 +974,11 @@ const WorkplanView: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={newProject.fileNo}
-                      onChange={(e) => setNewProject({ ...newProject, fileNo: e.target.value })}
+                      value={newProject.project_info.file_no}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, file_no: e.target.value }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       placeholder="Enter file number"
                       required
@@ -771,17 +989,15 @@ const WorkplanView: React.FC = () => {
                       Sub Component
                     </label>
                     <select
-                      value={newProject.projectId}
-                      onChange={(e) => setNewProject({ ...newProject, projectId: e.target.value })}
+                      value={newProject.sub_component_id}
+                      onChange={(e) => setNewProject({ ...newProject, sub_component_id: parseInt(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     >
-                      <option value="">Select Sub Component</option>
-                      {selectedComponent?.componentId && 
-                        subComponentOptions[selectedComponent.componentId as keyof typeof subComponentOptions]?.map((id: string) => (
-                          <option key={id} value={id}>{id}</option>
-                        ))
-                      }
+                      <option value={0}>Select Sub Component</option>
+                      {availableSubComponents.map((subComp) => (
+                        <option key={subComp.id} value={subComp.id}>{subComp.title}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -790,8 +1006,11 @@ const WorkplanView: React.FC = () => {
                     </label>
                     <input
                       type="date"
-                      value={newProject.expectedStartDate}
-                      onChange={(e) => setNewProject({ ...newProject, expectedStartDate: e.target.value })}
+                      value={newProject.project_info.expected_start_date}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, expected_start_date: e.target.value }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     />
@@ -802,8 +1021,11 @@ const WorkplanView: React.FC = () => {
                     </label>
                     <input
                       type="date"
-                      value={newProject.expectedEndDate}
-                      onChange={(e) => setNewProject({ ...newProject, expectedEndDate: e.target.value })}
+                      value={newProject.project_info.expected_end_date}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, expected_end_date: e.target.value }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     />
@@ -814,8 +1036,11 @@ const WorkplanView: React.FC = () => {
                     </label>
                     <input
                       type="number"
-                      value={newProject.idaFunding}
-                      onChange={(e) => setNewProject({ ...newProject, idaFunding: Number(e.target.value) })}
+                      value={newProject.project_info.ida_funding}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, ida_funding: Number(e.target.value) }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     />
@@ -826,8 +1051,11 @@ const WorkplanView: React.FC = () => {
                     </label>
                     <input
                       type="number"
-                      value={newProject.gcfFunding}
-                      onChange={(e) => setNewProject({ ...newProject, gcfFunding: Number(e.target.value) })}
+                      value={newProject.project_info.gcf_funding}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, gcf_funding: Number(e.target.value) }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     />
@@ -838,8 +1066,11 @@ const WorkplanView: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={newProject.leadImplementation}
-                      onChange={(e) => setNewProject({ ...newProject, leadImplementation: e.target.value })}
+                      value={newProject.project_info.lead_implementation}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, lead_implementation: e.target.value }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     />
@@ -850,8 +1081,11 @@ const WorkplanView: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={newProject.partners}
-                      onChange={(e) => setNewProject({ ...newProject, partners: e.target.value })}
+                      value={newProject.project_info.partners}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, partners: e.target.value }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     />
@@ -861,15 +1095,19 @@ const WorkplanView: React.FC = () => {
                       Procurement Method
                     </label>
                     <select
-                      value={newProject.procurementMethod}
-                      onChange={(e) => setNewProject({ ...newProject, procurementMethod: e.target.value })}
+                      value={newProject.project_info.procurement_method}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, procurement_method: e.target.value }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     >
                       <option value="">Select Method</option>
-                      {procurementMethods.map((method) => (
-                        <option key={method} value={method}>{method}</option>
-                      ))}
+                      <option value="Open Tender">Open Tender</option>
+                      <option value="Limited Tender">Limited Tender</option>
+                      <option value="Direct Contract">Direct Contract</option>
+                      <option value="Framework Agreement">Framework Agreement</option>
                     </select>
                   </div>
                   <div>
@@ -877,8 +1115,11 @@ const WorkplanView: React.FC = () => {
                       Status
                     </label>
                     <select
-                      value={newProject.status}
-                      onChange={(e) => setNewProject({ ...newProject, status: e.target.value as 'completed' | 'in_progress' | 'approved' })}
+                      value={newProject.project_info.status}
+                      onChange={(e) => setNewProject({ 
+                        ...newProject, 
+                        project_info: { ...newProject.project_info, status: e.target.value }
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
                     >
@@ -995,7 +1236,7 @@ const WorkplanView: React.FC = () => {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Workplan Management</h1>
-          <p className="text-gray-600 mt-2">Manage components, projects, and activities</p>
+          <p className="text-gray-600 mt-2">Manage workplans, components and projects</p>
         </div>
         <div className="flex items-center space-x-3">
           <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 min-w-[100px] justify-center">
@@ -1034,10 +1275,7 @@ const WorkplanView: React.FC = () => {
           </select>
         </div>
         <button
-          onClick={() => {
-            console.log('Opening component form');
-            setShowCreateForm(true);
-          }}
+          onClick={() => setShowCreateWorkplanForm(true)}
           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -1052,22 +1290,28 @@ const WorkplanView: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Component Name
+                  Workplan Title
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Component
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sub-Component
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Procurement Method
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  IDA
+                  Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  GCF
+                  IDA Funding
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  GCF Funding
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total Funding
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -1077,158 +1321,199 @@ const WorkplanView: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoadingComponents ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={9} className="px-6 py-12 text-center">
                     <div className="flex items-center justify-center">
                       <Loader2 className="w-6 h-6 animate-spin text-green-600 mr-2" />
-                      <span className="text-gray-600">Loading components...</span>
+                      <span className="text-gray-600">Loading workplans...</span>
                     </div>
                   </td>
                 </tr>
               ) : componentsError ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={9} className="px-6 py-12 text-center">
                     <div className="flex items-center justify-center">
                       <AlertCircle className="w-6 h-6 text-red-500 mr-2" />
                       <span className="text-red-600">{componentsError}</span>
                     </div>
                   </td>
                 </tr>
-              ) : filteredComponents.length === 0 ? (
+              ) : filteredWorkplans.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={9} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center">
                       <Building className="w-12 h-12 text-gray-300 mb-4" />
-                      <p className="text-gray-500 text-lg font-medium">No components found</p>
+                      <p className="text-gray-500 text-lg font-medium">No workplans found</p>
                       <p className="text-gray-400 text-sm mt-1">
-                        {searchTerm ? 'No components match your search criteria' : 'Create components in Settings to get started'}
+                        {searchTerm ? 'No workplans match your search criteria' : 'Create workplans to get started'}
                       </p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                filteredComponents.map((component) => (
-                <React.Fragment key={component.id}>
-                  {/* Component Row */}
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <button
-                          onClick={() => toggleComponentExpansion(component.id)}
-                          className="mr-2 p-1 hover:bg-gray-200 rounded transition-colors"
-                        >
-                          {expandedComponents.has(component.id) ? (
-                            <ChevronDown className="w-4 h-4 text-gray-500" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-gray-500" />
-                          )}
-                        </button>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {component.name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {component.projects.length} projects
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      -
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      -
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      -
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      -
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      -
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleViewDetails(component)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
+                filteredWorkplans.map((workplan) => {
+                  const aggregatedData = getWorkplanAggregatedData(workplan);
+                  const isExpanded = expandedWorkplans.has(workplan.id.toString());
                   
-                  {/* Project Rows (when expanded) */}
-                  {expandedComponents.has(component.id) && component.projects.map((project) => (
-                    <tr key={project.id} className="bg-gray-50 hover:bg-gray-100">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="ml-8">
-                          <div className="text-sm font-medium text-gray-900">
-                            {project.name}
+                  return (
+                    <React.Fragment key={workplan.id}>
+                      {/* Workplan Row */}
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <button
+                              onClick={() => toggleWorkplanExpansion(workplan.id.toString())}
+                              className="mr-2 p-1 hover:bg-gray-200 rounded transition-colors"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-gray-500" />
+                              )}
+                            </button>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {workplan.title}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {workplan.projects.length} projects
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {project.procurementMethod}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                        {formatCurrency(project.idaFunding)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                        {formatCurrency(project.gcfFunding)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
-                        {formatCurrency(getTotalFunding(project.idaFunding, project.gcfFunding))}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          project.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          project.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {project.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => handleViewDetails(component, project)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-                ))
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {workplan.component.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {aggregatedData.subComponent}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {aggregatedData.procurementMethod}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            aggregatedData.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            aggregatedData.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                            aggregatedData.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {aggregatedData.status.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatCurrency(aggregatedData.idaFunding)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatCurrency(aggregatedData.gcfFunding)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                          {formatCurrency(aggregatedData.totalFunding)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleViewWorkplanDetails(workplan)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                      
+                      {/* Project Rows (when expanded) */}
+                      {isExpanded && workplan.projects.map((project) => {
+                        const subComponent = availableSubComponents.find(sub => sub.id === project.sub_component_id);
+                        return (
+                          <tr key={project.id} className="bg-gray-50 hover:bg-gray-100">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="ml-8">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {project.title}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  File No: {project.project_info.file_no || 'N/A'}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              -
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {subComponent?.title || 'Unknown'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {project.project_info.procurement_method || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                project.project_info.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                project.project_info.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                                project.project_info.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {(project.project_info.status || 'N/A').replace('_', ' ').toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                              {formatCurrency(project.project_info.ida_funding || 0)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                              {formatCurrency(project.project_info.gcf_funding || 0)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                              {formatCurrency(getTotalFunding(project.project_info.ida_funding || 0, project.project_info.gcf_funding || 0))}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <button
+                                onClick={() => handleViewProjectDetails(project)}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
+                              >
+                                <Eye className="w-4 h-4" />
+                                View Details
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Create Component Modal */}
-      {showCreateForm && (
+
+
+      {/* Create Workplan Modal */}
+      {showCreateWorkplanForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative shadow-2xl">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Create New Workplan</h2>
-            
-            {/* Error Message */}
-            {componentsError && (
-              <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                <p className="text-red-700 text-sm">{componentsError}</p>
-                <button
-                  onClick={() => setComponentsError(null)}
-                  className="ml-auto text-red-500 hover:text-red-700"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            {projectsError && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                {projectsError}
               </div>
             )}
-
-            <form onSubmit={handleCreateComponent} className="space-y-4">
+            <form onSubmit={(e) => {
+              console.log('Form submitted!');
+              handleCreateWorkplan(e);
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Workplan Title
+                </label>
+                <input
+                  type="text"
+                  value={newWorkplan.title}
+                  onChange={(e) => {
+                    console.log('Title changed:', e.target.value);
+                    setNewWorkplan({ ...newWorkplan, title: e.target.value });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  required
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Component
@@ -1240,22 +1525,18 @@ const WorkplanView: React.FC = () => {
                   </div>
                 ) : (
                   <select
-                    value={newComponent.componentId}
+                    value={newWorkplan.component_id}
                     onChange={(e) => {
-                      const selected = availableComponents.find(comp => comp.id.toString() === e.target.value);
-                      setNewComponent({ 
-                        ...newComponent, 
-                        componentId: e.target.value,
-                        name: selected ? selected.name : ''
-                      });
+                      console.log('Component changed:', e.target.value);
+                      setNewWorkplan({ ...newWorkplan, component_id: parseInt(e.target.value) });
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     required
                     disabled={isLoadingComponents}
                   >
-                    <option value="">Select Component</option>
+                    <option value={0}>Select Component</option>
                     {availableComponents.map((component) => (
-                      <option key={component.id} value={component.id.toString()}>
+                      <option key={component.id} value={component.id}>
                         {component.name}
                       </option>
                     ))}
@@ -1268,192 +1549,18 @@ const WorkplanView: React.FC = () => {
               <div className="flex items-center justify-end space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowCreateForm(false)}
+                  onClick={() => setShowCreateWorkplanForm(false)}
                   className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoadingComponents || availableComponents.length === 0}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed"
+                  disabled={isLoadingComponents || availableComponents.length === 0 || isLoadingProjects}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Create Workplan
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Create Project Modal */}
-      {showCreateProjectForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto relative shadow-2xl">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Create New Project</h2>
-            <form onSubmit={handleCreateProject} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Project Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newProject.name}
-                    onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    File No
-                  </label>
-                  <input
-                    type="text"
-                    value={newProject.fileNo}
-                    onChange={(e) => setNewProject({ ...newProject, fileNo: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Enter file number"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Sub Component
-                  </label>
-                  <select
-                    value={newProject.projectId}
-                    onChange={(e) => setNewProject({ ...newProject, projectId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select Sub Component</option>
-                    {selectedComponent && (selectedComponent as Component).componentId && 
-                      subComponentOptions[(selectedComponent as Component).componentId as keyof typeof subComponentOptions]?.map((id: string) => (
-                        <option key={id} value={id}>{id}</option>
-                      ))
-                    }
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Expected Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={newProject.expectedStartDate}
-                    onChange={(e) => setNewProject({ ...newProject, expectedStartDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Expected End Date
-                  </label>
-                  <input
-                    type="date"
-                    value={newProject.expectedEndDate}
-                    onChange={(e) => setNewProject({ ...newProject, expectedEndDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    IDA Funding
-                  </label>
-                  <input
-                    type="number"
-                    value={newProject.idaFunding}
-                    onChange={(e) => setNewProject({ ...newProject, idaFunding: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    GCF Funding
-                  </label>
-                  <input
-                    type="number"
-                    value={newProject.gcfFunding}
-                    onChange={(e) => setNewProject({ ...newProject, gcfFunding: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Lead Implementation
-                  </label>
-                  <input
-                    type="text"
-                    value={newProject.leadImplementation}
-                    onChange={(e) => setNewProject({ ...newProject, leadImplementation: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Partners
-                  </label>
-                  <input
-                    type="text"
-                    value={newProject.partners}
-                    onChange={(e) => setNewProject({ ...newProject, partners: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Procurement Method
-                  </label>
-                  <select
-                    value={newProject.procurementMethod}
-                    onChange={(e) => setNewProject({ ...newProject, procurementMethod: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select Method</option>
-                    {procurementMethods.map((method) => (
-                      <option key={method} value={method}>{method}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Status
-                  </label>
-                  <select
-                    value={newProject.status}
-                    onChange={(e) => setNewProject({ ...newProject, status: e.target.value as 'completed' | 'in_progress' | 'approved' })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select Status</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="approved">Approved</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex items-center justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateProjectForm(false)}
-                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                >
-                  Create Project
+                  {isLoadingProjects && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isLoadingProjects ? 'Creating...' : 'Create Workplan'}
                 </button>
               </div>
             </form>

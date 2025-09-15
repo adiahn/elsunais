@@ -85,11 +85,13 @@ const StoreManagerView: React.FC = () => {
       setItemsError(null);
       
       const token = localStorage.getItem('authToken');
+      console.log('Auth token:', token ? 'Present' : 'Missing');
       if (!token) {
         setItemsError('Please log in to view items');
         return;
       }
       
+      console.log('Attempting to fetch store items...');
       const apiItems = await storeService.getItems();
       
       // Convert API items to local format
@@ -106,10 +108,19 @@ const StoreManagerView: React.FC = () => {
       }));
       
       setItems(localItems);
+      console.log('Successfully fetched items:', localItems);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load items';
       setItemsError(errorMessage);
       console.error('Error fetching items:', err);
+      
+      // Log detailed error information
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as any;
+        console.error('Error status:', axiosError.response?.status);
+        console.error('Error data:', axiosError.response?.data);
+        console.error('Error headers:', axiosError.response?.headers);
+      }
     } finally {
       setIsLoadingItems(false);
     }
@@ -465,6 +476,7 @@ const StoreManagerView: React.FC = () => {
           </button>
         </div>
       </div>
+
 
       {/* Error Message */}
       {errorMessage && (

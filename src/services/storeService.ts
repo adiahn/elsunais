@@ -69,7 +69,9 @@ class StoreService {
    */
   async createItem(data: CreateStoreItemRequest): Promise<CreateStoreItemResponse> {
     try {
+      console.log('Creating store item:', data);
       const response = await apiClient.post<CreateStoreItemResponse>('/store/items', data);
+      console.log('Create item response:', response.data);
       return response.data;
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
@@ -105,7 +107,9 @@ class StoreService {
    */
   async getItems(): Promise<StoreItem[]> {
     try {
+      console.log('Fetching store items...');
       const response = await apiClient.get<StoreItemsResponse>('/store/items');
+      console.log('Store items response:', response.data);
       return response.data.items || [];
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
@@ -115,6 +119,8 @@ class StoreService {
         
         if (status === 401) {
           throw new Error('Unauthorized. Please log in again.');
+        } else if (status === 422) {
+          throw new Error(message || 'Invalid request format. Please check the API documentation.');
         } else if (status === 500) {
           throw new Error('Server error. Please try again later.');
         } else if (status >= 500) {
@@ -249,7 +255,9 @@ class StoreService {
    */
   async getRequests(): Promise<StoreRequest[]> {
     try {
+      console.log('Fetching store requests...');
       const response = await apiClient.get<StoreRequestsResponse>('/store/requests');
+      console.log('Store requests response:', response.data);
       return response.data.requests || [];
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
@@ -259,12 +267,14 @@ class StoreService {
         
         if (status === 401) {
           throw new Error('Unauthorized. Please log in again.');
+        } else if (status === 405) {
+          throw new Error('Method not allowed. This endpoint may not support GET requests.');
+        } else if (status === 422) {
+          throw new Error(message || 'Invalid request format. Please check the API documentation.');
         } else if (status === 500) {
           throw new Error('Server error. Please try again later.');
         } else if (status >= 500) {
           throw new Error('Server is temporarily unavailable. Please try again later.');
-        } else if (status === 0 || !status) {
-          throw new Error('Network error. Please check your internet connection.');
         } else if (status === 0 || !status) {
           throw new Error('Network error. Please check your internet connection.');
         } else {

@@ -6,7 +6,7 @@ export const API_BASE_URL = 'https://flask-management-api.onrender.com';
 // Create axios instance with default configuration
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Increased timeout to 30 seconds
   headers: {
     'Content-Type': 'application/json',
   },
