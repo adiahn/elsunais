@@ -188,7 +188,7 @@ const WorkplanView: React.FC = () => {
               return {
                 ...workplan,
                 component: { id: 0, name: 'No Component' },
-                projects: []
+          projects: []
               };
             }
           
@@ -201,7 +201,7 @@ const WorkplanView: React.FC = () => {
               console.log(`Fetching projects for workplan ${workplan.id}...`);
               projects = await projectService.getProjectsByWorkplan(workplan.id);
               console.log(`Found ${projects.length} projects for workplan ${workplan.id}:`, projects);
-            } catch (err) {
+      } catch (err) {
               console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
             }
             
@@ -233,7 +233,9 @@ const WorkplanView: React.FC = () => {
       setIsLoadingSubComponents(true);
       setSubComponentsError(null);
       
+      console.log(`Fetching sub-components for component ${componentId}...`);
       const subComponents = await subComponentService.getSubComponentsByComponent(componentId);
+      console.log(`Found ${subComponents.length} sub-components for component ${componentId}:`, subComponents);
       setAvailableSubComponents(subComponents);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load sub-components';
@@ -242,6 +244,11 @@ const WorkplanView: React.FC = () => {
     } finally {
       setIsLoadingSubComponents(false);
     }
+  };
+
+  // Clear sub-component cache when needed
+  const clearSubComponentCache = () => {
+    subComponentService.clearCache();
   };
 
 
@@ -449,6 +456,7 @@ const WorkplanView: React.FC = () => {
   };
 
   const handleViewWorkplanDetails = async (workplan: WorkplanWithComponent) => {
+    console.log('Viewing workplan details:', workplan);
     setSelectedWorkplan(workplan);
     setSelectedComponent({
       id: workplan.component.id.toString(),
@@ -460,6 +468,7 @@ const WorkplanView: React.FC = () => {
     setActiveTab('overview');
     
     // Fetch sub-components for this component
+    console.log(`Fetching sub-components for component ${workplan.component.id}...`);
     await fetchSubComponents(workplan.component.id);
     
     // Set the component_id in the new project form
@@ -999,6 +1008,7 @@ const WorkplanView: React.FC = () => {
                         <option key={subComp.id} value={subComp.id}>{subComp.title}</option>
                       ))}
                     </select>
+                    {console.log('Available sub-components for project form:', availableSubComponents)}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1357,36 +1367,36 @@ const WorkplanView: React.FC = () => {
                   return (
                     <React.Fragment key={workplan.id}>
                       {/* Workplan Row */}
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <button
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <button
                               onClick={() => toggleWorkplanExpansion(workplan.id.toString())}
-                              className="mr-2 p-1 hover:bg-gray-200 rounded transition-colors"
-                            >
+                          className="mr-2 p-1 hover:bg-gray-200 rounded transition-colors"
+                        >
                               {isExpanded ? (
-                                <ChevronDown className="w-4 h-4 text-gray-500" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4 text-gray-500" />
-                              )}
-                            </button>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
+                            <ChevronDown className="w-4 h-4 text-gray-500" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-gray-500" />
+                          )}
+                        </button>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
                                 {workplan.title}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {workplan.projects.length} projects
-                              </div>
-                            </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="text-sm text-gray-500">
+                                {workplan.projects.length} projects
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {workplan.component.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {aggregatedData.subComponent}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {aggregatedData.procurementMethod}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -1398,61 +1408,61 @@ const WorkplanView: React.FC = () => {
                           }`}>
                             {aggregatedData.status.replace('_', ' ').toUpperCase()}
                           </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {formatCurrency(aggregatedData.idaFunding)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {formatCurrency(aggregatedData.gcfFunding)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
                           {formatCurrency(aggregatedData.totalFunding)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button
                             onClick={() => handleViewWorkplanDetails(workplan)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
-                          >
-                            <Eye className="w-4 h-4" />
-                            View Details
-                          </button>
-                        </td>
-                      </tr>
-                      
-                      {/* Project Rows (when expanded) */}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Details
+                      </button>
+                    </td>
+                  </tr>
+                  
+                  {/* Project Rows (when expanded) */}
                       {isExpanded && workplan.projects.map((project) => {
                         const subComponent = availableSubComponents.find(sub => sub.id === project.sub_component_id);
                         return (
-                          <tr key={project.id} className="bg-gray-50 hover:bg-gray-100">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="ml-8">
-                                <div className="text-sm font-medium text-gray-900">
+                    <tr key={project.id} className="bg-gray-50 hover:bg-gray-100">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="ml-8">
+                          <div className="text-sm font-medium text-gray-900">
                                   {project.title}
                                 </div>
                                 <div className="text-sm text-gray-500">
                                   File No: {project.project_info.file_no || 'N/A'}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               -
-                            </td>
+                      </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {subComponent?.title || 'Unknown'}
-                            </td>
+                      </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {project.project_info.procurement_method || 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 project.project_info.status === 'completed' ? 'bg-green-100 text-green-800' :
                                 project.project_info.status === 'approved' ? 'bg-blue-100 text-blue-800' :
                                 project.project_info.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
                                 'bg-gray-100 text-gray-800'
                               }`}>
                                 {(project.project_info.status || 'N/A').replace('_', ' ').toUpperCase()}
-                              </span>
-                            </td>
+                        </span>
+                      </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
                               {formatCurrency(project.project_info.ida_funding || 0)}
                             </td>
@@ -1462,19 +1472,19 @@ const WorkplanView: React.FC = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
                               {formatCurrency(getTotalFunding(project.project_info.ida_funding || 0, project.project_info.gcf_funding || 0))}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <button
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
                                 onClick={() => handleViewProjectDetails(project)}
-                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
-                              >
-                                <Eye className="w-4 h-4" />
-                                View Details
-                              </button>
-                            </td>
-                          </tr>
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
                         );
                       })}
-                    </React.Fragment>
+                </React.Fragment>
                   );
                 })
               )}
