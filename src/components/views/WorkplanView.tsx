@@ -4,6 +4,7 @@ import { componentService, Component as ApiComponent } from '../../services/comp
 import { subComponentService, SubComponent } from '../../services/subComponentService';
 import { projectService, Project } from '../../services/projectService';
 import { workplanService, Workplan } from '../../services/workplanService';
+import { activityService, Activity as ApiActivity, ProcurementMethod } from '../../services/activityService';
 
 interface Activity {
   id: string;
@@ -50,6 +51,9 @@ const WorkplanView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [availableSubComponents, setAvailableSubComponents] = useState<SubComponent[]>([]);
   const [expandedWorkplans, setExpandedWorkplans] = useState<Set<string>>(new Set());
+  const [activities, setActivities] = useState<ApiActivity[]>([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [activitiesError, setActivitiesError] = useState<string | null>(null);
   const [newWorkplan, setNewWorkplan] = useState<{
     title: string;
     component_id: number;
@@ -88,11 +92,22 @@ const WorkplanView: React.FC = () => {
       status: 'in_progress'
     }
   });
-  const [newActivity, setNewActivity] = useState<Omit<Activity, 'id'>>({
-    name: '',
-    date: '',
-    description: '',
-    status: 'pending'
+  const [newActivity, setNewActivity] = useState<{
+    title: string;
+    duration: number;
+    project_id: number;
+    expected_start_time: string;
+    expected_finish_time: string;
+    status: 'in-progress' | 'completed' | 'pending' | 'cancelled';
+    procurement_methods: ProcurementMethod[];
+  }>({
+    title: '',
+    duration: 0,
+    project_id: 0,
+    expected_start_time: '',
+    expected_finish_time: '',
+    status: 'pending',
+    procurement_methods: []
   });
 
 
@@ -176,6 +191,12 @@ const WorkplanView: React.FC = () => {
           return;
         }
         
+        // Fetch all sub-components first
+        console.log('Fetching all sub-components...');
+        const allSubComponents = await subComponentService.getAllSubComponents();
+        console.log('All sub-components fetched:', allSubComponents);
+        setAvailableSubComponents(allSubComponents);
+
         // Convert API workplans to workplan with component format and fetch their projects
         const workplansWithComponents: WorkplanWithComponent[] = await Promise.all(
           apiWorkplans.map(async (workplan) => {
@@ -247,8 +268,27 @@ const WorkplanView: React.FC = () => {
   };
 
   // Clear sub-component cache when needed
-  const clearSubComponentCache = () => {
-    subComponentService.clearCache();
+  // const clearSubComponentCache = () => {
+  //   subComponentService.clearCache();
+  // };
+
+  // Fetch activities for a project
+  const fetchActivities = async (projectId: number) => {
+    try {
+      setIsLoadingActivities(true);
+      setActivitiesError(null);
+      
+      console.log(`Fetching activities for project ${projectId}...`);
+      const projectActivities = await activityService.getActivitiesByProject(projectId);
+      console.log(`Found ${projectActivities.length} activities for project ${projectId}:`, projectActivities);
+      setActivities(projectActivities);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load activities';
+      setActivitiesError(errorMessage);
+      console.error('Error fetching activities:', err);
+    } finally {
+      setIsLoadingActivities(false);
+    }
   };
 
 
@@ -328,6 +368,12 @@ const WorkplanView: React.FC = () => {
         setProjectsError('Failed to refresh workplans after creation');
         return;
       }
+      
+      // Fetch all sub-components
+      console.log('Fetching all sub-components after workplan creation...');
+      const allSubComponents = await subComponentService.getAllSubComponents();
+      console.log('All sub-components fetched after creation:', allSubComponents);
+      setAvailableSubComponents(allSubComponents);
       
       const workplansWithComponents: WorkplanWithComponent[] = await Promise.all(
         apiWorkplans.map(async (workplan) => {
@@ -439,20 +485,48 @@ const WorkplanView: React.FC = () => {
     }
   };
 
-  const handleCreateActivity = (e: React.FormEvent) => {
+  const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
     
-    // For now, we'll just show a success message since activities are not part of the API yet
-    alert('Activity creation will be implemented when the activities API is available');
-    
+    try {
+      setIsLoadingActivities(true);
+      setActivitiesError(null);
+      
+      const activityData = {
+        title: newActivity.title,
+        duration: newActivity.duration,
+        project_id: selectedProject.id,
+        expected_start_time: newActivity.expected_start_time,
+        expected_finish_time: newActivity.expected_finish_time,
+        status: newActivity.status,
+        procurement_methods: newActivity.procurement_methods
+      };
+      
+      console.log('Creating activity with data:', activityData);
+      await activityService.createActivity(activityData);
+      
+      // Refresh activities for the project
+      await fetchActivities(selectedProject.id);
+      
+      // Reset form
     setNewActivity({
-      name: '',
-      date: '',
-      description: '',
-      status: 'pending'
+        title: '',
+        duration: 0,
+        project_id: selectedProject.id,
+        expected_start_time: '',
+        expected_finish_time: '',
+        status: 'pending',
+        procurement_methods: []
     });
     setShowCreateActivityForm(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create activity';
+      setActivitiesError(errorMessage);
+      console.error('Error creating activity:', err);
+    } finally {
+      setIsLoadingActivities(false);
+    }
   };
 
   const handleViewWorkplanDetails = async (workplan: WorkplanWithComponent) => {
@@ -483,6 +557,9 @@ const WorkplanView: React.FC = () => {
     
     setSelectedProject(project);
     setActiveTab('overview');
+    
+    // Fetch activities for this project
+    await fetchActivities(project.id);
   };
 
   const handleBackToList = () => {
@@ -524,31 +601,6 @@ const WorkplanView: React.FC = () => {
     }, 0);
   };
 
-  const getWorkplanAggregatedData = (workplan: WorkplanWithComponent) => {
-    if (workplan.projects.length === 0) {
-      return {
-        subComponent: 'No Projects',
-        procurementMethod: 'N/A',
-        status: 'N/A',
-        idaFunding: 0,
-        gcfFunding: 0,
-        totalFunding: 0
-      };
-    }
-
-    // Get the first project's data as representative
-    const firstProject = workplan.projects[0];
-    const subComponent = availableSubComponents.find(sub => sub.id === firstProject.sub_component_id)?.title || 'Unknown';
-    
-    return {
-      subComponent,
-      procurementMethod: firstProject.project_info.procurement_method || 'N/A',
-      status: firstProject.project_info.status || 'N/A',
-      idaFunding: workplan.projects.reduce((total, p) => total + (p.project_info.ida_funding || 0), 0),
-      gcfFunding: workplan.projects.reduce((total, p) => total + (p.project_info.gcf_funding || 0), 0),
-      totalFunding: getWorkplanTotalFunding(workplan)
-    };
-  };
 
   const filteredWorkplans = workplans.filter(workplan => {
     const matchesSearch = workplan.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -934,12 +986,69 @@ const WorkplanView: React.FC = () => {
                   </button>
                 )}
               </div>
+              
+              {activitiesError && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                  {activitiesError}
+                </div>
+              )}
+              
               <div className="space-y-4">
-                <div className="text-center py-8">
-                  <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No activities available</p>
-                  <p className="text-sm text-gray-400 mt-1">Activities will be implemented when the API is available</p>
+                {isLoadingActivities ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-green-600 mr-2" />
+                    <span className="text-gray-600">Loading activities...</span>
+                  </div>
+                ) : !activities || activities.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No activities available</p>
+                    <p className="text-sm text-gray-400 mt-1">Create activities to track project progress</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {activities.map((activity) => (
+                      <div key={activity.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-gray-800 flex items-center">
+                            <Activity className="w-4 h-4 mr-2 text-blue-600" />
+                            {activity.title || 'Untitled Activity'}
+                          </h4>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            activity.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            activity.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
+                            activity.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {(activity.status || 'pending').replace('-', ' ').toUpperCase()}
+                          </span>
                       </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Duration:</span>
+                            <span className="font-medium text-gray-800">{activity.duration || 0} days</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Start:</span>
+                            <span className="font-medium text-gray-800">
+                              {activity.expected_start_time ? new Date(activity.expected_start_time).toLocaleDateString() : 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Finish:</span>
+                            <span className="font-medium text-gray-800">
+                              {activity.expected_finish_time ? new Date(activity.expected_finish_time).toLocaleDateString() : 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Procurement Methods:</span>
+                            <span className="font-medium text-gray-800">{activity.procurement_methods?.length || 0}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1008,7 +1117,7 @@ const WorkplanView: React.FC = () => {
                         <option key={subComp.id} value={subComp.id}>{subComp.title}</option>
                       ))}
                     </select>
-                    {console.log('Available sub-components for project form:', availableSubComponents)}
+                    {/* Debug: Available sub-components for project form */}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1163,42 +1272,61 @@ const WorkplanView: React.FC = () => {
         {/* Create Activity Modal */}
         {showCreateActivityForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-            <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative shadow-2xl">
+            <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto relative shadow-2xl">
               <h2 className="text-xl font-semibold text-gray-900 mb-6">Create New Activity</h2>
+              {activitiesError && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                  {activitiesError}
+                </div>
+              )}
               <form onSubmit={handleCreateActivity} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Activity Name
+                      Activity Title
                   </label>
                   <input
                     type="text"
-                    value={newActivity.name}
-                    onChange={(e) => setNewActivity({ ...newActivity, name: e.target.value })}
+                      value={newActivity.title}
+                      onChange={(e) => setNewActivity({ ...newActivity, title: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date
+                      Duration (days)
                   </label>
                   <input
-                    type="date"
-                    value={newActivity.date}
-                    onChange={(e) => setNewActivity({ ...newActivity, date: e.target.value })}
+                      type="number"
+                      value={newActivity.duration}
+                      onChange={(e) => setNewActivity({ ...newActivity, duration: Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     required
+                      min="1"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
+                      Expected Start Time
                   </label>
-                  <textarea
-                    value={newActivity.description}
-                    onChange={(e) => setNewActivity({ ...newActivity, description: e.target.value })}
+                    <input
+                      type="datetime-local"
+                      value={newActivity.expected_start_time}
+                      onChange={(e) => setNewActivity({ ...newActivity, expected_start_time: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    rows={3}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Expected Finish Time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={newActivity.expected_finish_time}
+                      onChange={(e) => setNewActivity({ ...newActivity, expected_finish_time: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     required
                   />
                 </div>
@@ -1213,10 +1341,69 @@ const WorkplanView: React.FC = () => {
                     required
                   >
                     <option value="pending">Pending</option>
-                    <option value="in_progress">In Progress</option>
+                      <option value="in-progress">In Progress</option>
                     <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Procurement Methods
+                  </label>
+                  <div className="space-y-2">
+                    {newActivity.procurement_methods.map((method, index) => (
+                      <div key={index} className="flex gap-2 p-3 border border-gray-200 rounded-md">
+                        <input
+                          type="text"
+                          placeholder="Method name (e.g., Direct Purchase, Tender)"
+                          value={method.method_name}
+                          onChange={(e) => {
+                            const updatedMethods = [...newActivity.procurement_methods];
+                            updatedMethods[index] = { ...method, method_name: e.target.value };
+                            setNewActivity({ ...newActivity, procurement_methods: updatedMethods });
+                          }}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Notes"
+                          value={typeof method.procurement_notes === 'string' ? method.procurement_notes : ''}
+                          onChange={(e) => {
+                            const updatedMethods = [...newActivity.procurement_methods];
+                            updatedMethods[index] = { ...method, procurement_notes: e.target.value };
+                            setNewActivity({ ...newActivity, procurement_methods: updatedMethods });
+                          }}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updatedMethods = newActivity.procurement_methods.filter((_, i) => i !== index);
+                            setNewActivity({ ...newActivity, procurement_methods: updatedMethods });
+                          }}
+                          className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewActivity({
+                          ...newActivity,
+                          procurement_methods: [...newActivity.procurement_methods, { method_name: '', procurement_notes: '' }]
+                        });
+                      }}
+                      className="w-full px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 hover:border-green-500 hover:text-green-600 rounded-md transition-colors"
+                    >
+                      + Add Procurement Method
+                    </button>
+                  </div>
+                </div>
+                
                 <div className="flex items-center justify-end space-x-3 pt-4">
                   <button
                     type="button"
@@ -1227,9 +1414,11 @@ const WorkplanView: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                    disabled={isLoadingActivities}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    Create Activity
+                    {isLoadingActivities && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {isLoadingActivities ? 'Creating...' : 'Create Activity'}
                   </button>
                 </div>
               </form>
@@ -1361,7 +1550,6 @@ const WorkplanView: React.FC = () => {
                 </tr>
               ) : (
                 filteredWorkplans.map((workplan) => {
-                  const aggregatedData = getWorkplanAggregatedData(workplan);
                   const isExpanded = expandedWorkplans.has(workplan.id.toString());
                   
                   return (
@@ -1393,30 +1581,25 @@ const WorkplanView: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {workplan.component.name}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {aggregatedData.subComponent}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                      -
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {aggregatedData.procurementMethod}
-                        </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                      -
+                    </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            aggregatedData.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            aggregatedData.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                            aggregatedData.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {aggregatedData.status.replace('_', ' ').toUpperCase()}
+                          <span className="text-gray-400 text-sm">
+                      -
                           </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(aggregatedData.idaFunding)}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                      -
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(aggregatedData.gcfFunding)}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          -
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
-                          {formatCurrency(aggregatedData.totalFunding)}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                      -
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
@@ -1431,7 +1614,10 @@ const WorkplanView: React.FC = () => {
                   
                   {/* Project Rows (when expanded) */}
                       {isExpanded && workplan.projects.map((project) => {
+                        console.log(`Looking for sub-component with ID: ${project.sub_component_id} (type: ${typeof project.sub_component_id})`);
+                        console.log('Available sub-components:', availableSubComponents.map(sub => ({ id: sub.id, title: sub.title, type: typeof sub.id })));
                         const subComponent = availableSubComponents.find(sub => sub.id === project.sub_component_id);
+                        console.log(`Found sub-component for project ${project.id}:`, subComponent);
                         return (
                     <tr key={project.id} className="bg-gray-50 hover:bg-gray-100">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1471,7 +1657,7 @@ const WorkplanView: React.FC = () => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
                               {formatCurrency(getTotalFunding(project.project_info.ida_funding || 0, project.project_info.gcf_funding || 0))}
-                            </td>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
                                 onClick={() => handleViewProjectDetails(project)}
@@ -1578,82 +1764,6 @@ const WorkplanView: React.FC = () => {
         </div>
       )}
 
-      {/* Create Activity Modal */}
-      {showCreateActivityForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative shadow-2xl">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Create New Activity</h2>
-            <form onSubmit={handleCreateActivity} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Activity Name
-                </label>
-                <input
-                  type="text"
-                  value={newActivity.name}
-                  onChange={(e) => setNewActivity({ ...newActivity, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={newActivity.date}
-                  onChange={(e) => setNewActivity({ ...newActivity, date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={newActivity.description}
-                  onChange={(e) => setNewActivity({ ...newActivity, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  rows={3}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
-                </label>
-                <select
-                  value={newActivity.status}
-                  onChange={(e) => setNewActivity({ ...newActivity, status: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateActivityForm(false)}
-                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                >
-                  Create Activity
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
