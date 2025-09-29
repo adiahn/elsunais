@@ -487,8 +487,15 @@ const WorkplanView: React.FC = () => {
     
     console.log('Creating workplan with data:', newWorkplan);
     
+    // Check if newWorkplan is defined
+    if (!newWorkplan) {
+      console.error('newWorkplan is undefined');
+      setProjectsError('Form data is not properly initialized. Please try again.');
+      return;
+    }
+    
     // Validate form data
-    if (!newWorkplan.title.trim()) {
+    if (!newWorkplan.title || !newWorkplan.title.trim()) {
       setProjectsError('Workplan title is required');
       return;
     }
@@ -511,8 +518,18 @@ const WorkplanView: React.FC = () => {
       
       const response = await workplanService.createWorkplan(workplanData);
       console.log('Workplan created successfully:', response);
-      console.log('Created workplan structure:', response.workplan);
-      console.log('Created workplan component_id:', response.workplan.component_id, 'type:', typeof response.workplan.component_id);
+      console.log('Response structure:', JSON.stringify(response, null, 2));
+      
+      // Check if response has the expected structure
+      if (!response || !response.workplan) {
+        console.warn('Unexpected response structure, but workplan was created successfully');
+        console.log('Response keys:', Object.keys(response || {}));
+        // Don't throw an error here since the workplan was created successfully
+        // We'll refresh the list to get the updated data
+      } else {
+        console.log('Created workplan structure:', response.workplan);
+        console.log('Created workplan component_id:', response.workplan.component_id, 'type:', typeof response.workplan.component_id);
+      }
       
       // Refresh workplans after successful creation
       console.log('Refreshing workplans after creation...');
@@ -1742,6 +1759,12 @@ const WorkplanView: React.FC = () => {
           onClick={async () => {
             console.log('Opening workplan form, reloading components...');
             await reloadComponents();
+            // Initialize form state
+            setNewWorkplan({
+              title: '',
+              component_id: 0
+            });
+            setProjectsError(null);
             setShowCreateWorkplanForm(true);
           }}
           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
@@ -1761,7 +1784,7 @@ const WorkplanView: React.FC = () => {
                   Expand
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Title
+                  Component
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Sub-Component
@@ -1840,7 +1863,7 @@ const WorkplanView: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {workplan.title || 'Untitled Workplan'}
+                            {workplan.component?.name || workplan.component?.title || 'Unknown Component'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
@@ -1950,6 +1973,7 @@ const WorkplanView: React.FC = () => {
             )}
             <form onSubmit={(e) => {
               console.log('Form submitted!');
+              console.log('newWorkplan state:', newWorkplan);
               handleCreateWorkplan(e);
             }} className="space-y-4">
               <div>
@@ -1981,21 +2005,27 @@ const WorkplanView: React.FC = () => {
                       const selectedComponentId = parseInt(e.target.value);
                       const selectedComponent = availableComponents.find(comp => comp.id === selectedComponentId);
                       
+                      console.log('Current newWorkplan state before update:', newWorkplan);
+                      
                       if (selectedComponent) {
                         console.log('Auto-generating workplan title from component:', selectedComponent.title);
                         // Auto-generate workplan title from component title
                         const workplanTitle = `${selectedComponent.title} Workplan`;
-                        setNewWorkplan({ 
+                        const updatedWorkplan = { 
                           ...newWorkplan, 
                           component_id: selectedComponentId,
                           title: workplanTitle
-                        });
+                        };
+                        console.log('Setting new workplan state:', updatedWorkplan);
+                        setNewWorkplan(updatedWorkplan);
                       } else {
-                        setNewWorkplan({ 
+                        const updatedWorkplan = { 
                           ...newWorkplan, 
                           component_id: selectedComponentId,
                           title: ''
-                        });
+                        };
+                        console.log('Setting new workplan state (no component):', updatedWorkplan);
+                        setNewWorkplan(updatedWorkplan);
                       }
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"

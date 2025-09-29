@@ -39,9 +39,48 @@ class WorkplanService {
   async createWorkplan(data: CreateWorkplanRequest): Promise<CreateWorkplanResponse> {
     try {
       console.log('Attempting to create workplan:', data);
-      const response = await apiClient.post<CreateWorkplanResponse>('/workplans', data);
+      const response = await apiClient.post('/workplans', data);
       console.log('Workplan creation response:', response.data);
-      return response.data;
+      console.log('Response structure:', JSON.stringify(response.data, null, 2));
+      
+      // Handle different response structures
+      let responseData = response.data;
+      
+      // If the response is the workplan directly (not wrapped in an object)
+      if (responseData && responseData.id && responseData.title) {
+        console.log('Response is workplan directly, wrapping in expected structure');
+        responseData = {
+          message: 'Workplan created successfully',
+          workplan: responseData
+        };
+      }
+      // If response has workplan property
+      else if (responseData && responseData.workplan) {
+        console.log('Response has workplan property');
+      }
+      // If response has data property containing workplan
+      else if (responseData && responseData.data) {
+        console.log('Response has data property, extracting workplan');
+        responseData = {
+          message: responseData.message || 'Workplan created successfully',
+          workplan: responseData.data
+        };
+      }
+      // If response is just a message
+      else if (responseData && responseData.message && !responseData.workplan) {
+        console.log('Response has only message, creating minimal workplan structure');
+        responseData = {
+          message: responseData.message,
+          workplan: {
+            id: 0, // Will be updated when we refresh the list
+            title: data.title,
+            component_id: data.component_id
+          }
+        };
+      }
+      
+      console.log('Processed response data:', responseData);
+      return responseData;
     } catch (error: unknown) {
       console.error('Workplan creation error:', error);
       if (error && typeof error === 'object' && 'response' in error) {
