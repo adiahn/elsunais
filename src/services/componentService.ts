@@ -4,12 +4,14 @@ import { apiClient } from '../config/api';
 export interface Component {
   id: number;
   name: string;
+  title: string;
   description?: string;
   isActive?: boolean;
 }
 
 export interface CreateComponentRequest {
   name: string;
+  title: string;
 }
 
 export interface CreateComponentResponse {

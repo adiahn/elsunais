@@ -15,11 +15,6 @@ export const testLoginAPI = async () => {
     throw error;
   }
 };
-
-// Uncomment the line below to test the API when the app loads
-// testLoginAPI();
-
-// Test function to check API connectivity
 export const testAPIConnectivity = async () => {
   try {
     const response = await fetch('https://flask-management-api.onrender.com/login', {
@@ -47,4 +42,4 @@ export const testAPIConnectivity = async () => {
     console.error('❌ API connectivity test failed:', error);
     return false;
   }
-};
+}

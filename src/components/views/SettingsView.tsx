@@ -3,6 +3,7 @@ import { Plus, Edit, Trash2, Save, X, Building, Receipt, Loader2, AlertCircle } 
 import { componentService, Component } from '../../services/componentService';
 
 interface LocalComponent extends Component {
+  title: string;
   description: string;
   isActive: boolean;
 }
@@ -49,7 +50,7 @@ const SettingsView: React.FC = () => {
   const [showTaxForm, setShowTaxForm] = useState(false);
   const [editingComponent, setEditingComponent] = useState<LocalComponent | null>(null);
   const [editingTax, setEditingTax] = useState<Tax | null>(null);
-  const [newComponent, setNewComponent] = useState({ name: '', description: '' });
+  const [newComponent, setNewComponent] = useState({ name: '', title: '', description: '' });
   const [newTax, setNewTax] = useState({ name: '', percentage: 0, description: '' });
 
   // Load components on mount
@@ -71,6 +72,7 @@ const SettingsView: React.FC = () => {
       // Convert API components to local format with default values
       const localComponents: LocalComponent[] = apiComponents.map(comp => ({
         ...comp,
+        title: comp.title || '',
         description: comp.description || '',
         isActive: comp.isActive ?? true
       }));
@@ -88,7 +90,7 @@ const SettingsView: React.FC = () => {
 
   const handleCreateComponent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComponent.name.trim()) return;
+    if (!newComponent.name.trim() || !newComponent.title.trim()) return;
 
     try {
       setIsLoading(true);
@@ -96,7 +98,10 @@ const SettingsView: React.FC = () => {
       setSuccessMessage(null);
       
       // Create component via API
-      await componentService.createComponent({ name: newComponent.name });
+      await componentService.createComponent({ 
+        name: newComponent.name,
+        title: newComponent.title
+      });
       
       // Show success message
       setSuccessMessage(`Component "${newComponent.name}" created successfully!`);
@@ -104,7 +109,7 @@ const SettingsView: React.FC = () => {
       // Reload components to get the updated list
       await loadComponents();
       
-      setNewComponent({ name: '', description: '' });
+      setNewComponent({ name: '', title: '', description: '' });
       setShowComponentForm(false);
       
       // Clear success message after 3 seconds
@@ -120,26 +125,29 @@ const SettingsView: React.FC = () => {
 
   const handleEditComponent = (component: LocalComponent) => {
     setEditingComponent(component);
-    setNewComponent({ name: component.name, description: component.description });
+    setNewComponent({ name: component.name, title: component.title, description: component.description });
     setShowComponentForm(true);
   };
 
   const handleUpdateComponent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingComponent || !newComponent.name.trim()) return;
+    if (!editingComponent || !newComponent.name.trim() || !newComponent.title.trim()) return;
 
     try {
       setIsLoading(true);
       setError(null);
       
       // Update component via API
-      await componentService.updateComponent(editingComponent.id, { name: newComponent.name });
+      await componentService.updateComponent(editingComponent.id, { 
+        name: newComponent.name,
+        title: newComponent.title
+      });
       
       // Reload components to get the updated list
       await loadComponents();
       
       setEditingComponent(null);
-      setNewComponent({ name: '', description: '' });
+      setNewComponent({ name: '', title: '', description: '' });
       setShowComponentForm(false);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update component';
@@ -232,7 +240,7 @@ const SettingsView: React.FC = () => {
     setShowTaxForm(false);
     setEditingComponent(null);
     setEditingTax(null);
-    setNewComponent({ name: '', description: '' });
+    setNewComponent({ name: '', title: '', description: '' });
     setNewTax({ name: '', percentage: 0, description: '' });
     setError(null);
     setSuccessMessage(null);
@@ -323,6 +331,7 @@ const SettingsView: React.FC = () => {
                         {component.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
+                    <p className="text-sm text-gray-700 font-medium mt-1">{component.title}</p>
                     <p className="text-sm text-gray-600 mt-1">{component.description}</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -466,6 +475,22 @@ const SettingsView: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newComponent.title}
+                  onChange={(e) => setNewComponent({ ...newComponent, title: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                  placeholder="e.g., Dryland Management Component, Community Climate Resilience Initiative"
+                  required
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter a title for the component (required by backend)</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description <span className="text-gray-400">(Optional)</span>
                 </label>
                 <textarea
@@ -480,7 +505,7 @@ const SettingsView: React.FC = () => {
               </div>
 
               {/* Success Message */}
-              {!isLoading && !error && newComponent.name && (
+              {!isLoading && !error && newComponent.name && newComponent.title && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -502,7 +527,7 @@ const SettingsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading || !newComponent.name.trim()}
+                  disabled={isLoading || !newComponent.name.trim() || !newComponent.title.trim()}
                   className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (

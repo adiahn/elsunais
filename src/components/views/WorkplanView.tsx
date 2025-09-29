@@ -41,6 +41,35 @@ const WorkplanView: React.FC = () => {
   const [workplans, setWorkplans] = useState<WorkplanWithComponent[]>([]);
   
   const [showCreateWorkplanForm, setShowCreateWorkplanForm] = useState(false);
+  
+  // Function to reload components
+  const reloadComponents = async () => {
+    try {
+      console.log('Reloading components...');
+      setIsLoadingComponents(true);
+      setComponentsError(null);
+      
+      const apiComponents = await componentService.getComponents();
+      console.log('Components reloaded:', apiComponents);
+      console.log('Number of components reloaded:', apiComponents.length);
+      
+      if (apiComponents && apiComponents.length > 0) {
+        setAvailableComponents(apiComponents);
+        console.log('Components successfully loaded and set');
+      } else {
+        console.warn('No components returned from API');
+        setAvailableComponents([]);
+        setComponentsError('No components available. Please create components in Settings first.');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reload components';
+      setComponentsError(errorMessage);
+      console.error('Error reloading components:', err);
+      setAvailableComponents([]);
+    } finally {
+      setIsLoadingComponents(false);
+    }
+  };
   const [showCreateProjectForm, setShowCreateProjectForm] = useState(false);
   const [showCreateActivityForm, setShowCreateActivityForm] = useState(false);
   const [selectedWorkplan, setSelectedWorkplan] = useState<WorkplanWithComponent | null>(null);
@@ -179,9 +208,26 @@ const WorkplanView: React.FC = () => {
           return;
         }
         
-        const apiWorkplans = await workplanService.getAllWorkplans();
+        // Load components first (they're more critical for the form)
         const apiComponents = await componentService.getComponents();
+        console.log('API components loaded:', apiComponents);
+        console.log('Number of components:', apiComponents.length);
         setAvailableComponents(apiComponents);
+        
+        // Then load workplans (this might fail but components are more important)
+        let apiWorkplans: Workplan[] = [];
+        try {
+          apiWorkplans = await workplanService.getAllWorkplans();
+          console.log('API workplans loaded:', apiWorkplans);
+          console.log('First workplan structure:', apiWorkplans[0]);
+          console.log('Workplan fields:', apiWorkplans[0] ? Object.keys(apiWorkplans[0]) : 'No workplans');
+          console.log('First workplan component:', apiWorkplans[0]?.component);
+          console.log('First workplan component_id:', apiWorkplans[0]?.component_id);
+          console.log('First workplan component type:', typeof apiWorkplans[0]?.component);
+        } catch (workplanError) {
+          console.warn('Failed to load workplans, but continuing with components:', workplanError);
+          // Don't set error for workplans, just log it
+        }
         
         
         // Check if workplans is valid array
@@ -203,18 +249,113 @@ const WorkplanView: React.FC = () => {
             console.log(`Looking for component with ID: ${workplan.component_id} (type: ${typeof workplan.component_id})`);
             console.log('Available components:', apiComponents.map(c => ({ id: c.id, name: c.name, type: typeof c.id })));
             
-            // Add null check for component_id
-            if (!workplan.component_id) {
-              console.warn(`Workplan ${workplan.id} has no component_id`);
+            // Check if workplan has component as string (API returns component name as string)
+            if ((workplan as any).component && typeof (workplan as any).component === 'string') {
+              console.log(`Workplan ${workplan.id} has component string:`, (workplan as any).component);
+              const componentName = (workplan as any).component;
+              
+              // Find the component by name in the available components
+              let component = apiComponents.find(comp => 
+                comp.name === componentName || 
+                comp.title === componentName ||
+                comp.name.toLowerCase() === componentName.toLowerCase() ||
+                comp.title.toLowerCase() === componentName.toLowerCase()
+              );
+              
+              if (component) {
+                console.log(`Found matching component for workplan ${workplan.id}:`, component);
+              } else {
+                console.warn(`No matching component found for "${componentName}" in workplan ${workplan.id}`);
+                // Create a component object from the string
+                component = {
+                  id: 0,
+                  name: componentName,
+                  title: componentName,
+                  description: '',
+                  isActive: true
+                };
+                console.log(`Created component object from string for workplan ${workplan.id}:`, component);
+              }
+              
+              let projects: Project[] = [];
+              try {
+                console.log(`Fetching projects for workplan ${workplan.id}...`);
+                projects = await projectService.getProjectsByWorkplan(workplan.id);
+                console.log(`Found ${projects.length} projects for workplan ${workplan.id}:`, projects);
+              } catch (err) {
+                console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
+              }
+              
               return {
                 ...workplan,
-                component: { id: 0, name: 'No Component' },
+                title: workplan.title || `${component.title} Workplan`,
+                component,
+                projects
+              };
+            }
+            
+            // Check if workplan has embedded component object (fallback)
+            if ((workplan as any).component && typeof (workplan as any).component === 'object') {
+              console.log(`Workplan ${workplan.id} has embedded component object:`, (workplan as any).component);
+              const embeddedComponent = (workplan as any).component;
+              
+              // Use the embedded component directly
+              const component = {
+                id: embeddedComponent.id || 0,
+                name: embeddedComponent.name || embeddedComponent.title || 'Unknown Component',
+                title: embeddedComponent.title || embeddedComponent.name || 'Unknown Component',
+                description: embeddedComponent.description || '',
+                isActive: embeddedComponent.isActive ?? true
+              };
+              
+              console.log(`Using embedded component for workplan ${workplan.id}:`, component);
+              
+              let projects: Project[] = [];
+              try {
+                console.log(`Fetching projects for workplan ${workplan.id}...`);
+                projects = await projectService.getProjectsByWorkplan(workplan.id);
+                console.log(`Found ${projects.length} projects for workplan ${workplan.id}:`, projects);
+              } catch (err) {
+                console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
+              }
+              
+              return {
+                ...workplan,
+                title: workplan.title || `${component.title} Workplan`,
+                component,
+                projects
+              };
+            }
+            
+            // Fallback to component_id lookup if no embedded component
+            const componentId = workplan.component_id || (workplan as any).componentId || (workplan as any).component_id;
+            console.log(`Workplan ${workplan.id} resolved component_id:`, componentId);
+            
+            // Add null check for component_id
+            if (!componentId) {
+              console.warn(`Workplan ${workplan.id} has no component_id (checked component_id, componentId)`);
+              return {
+                ...workplan,
+                component: { id: 0, name: 'No Component', title: 'No Component' },
           projects: []
               };
             }
           
-          const component = apiComponents.find(comp => comp.id === workplan.component_id || comp.id === parseInt(workplan.component_id.toString()));
-            console.log(`Found component for workplan ${workplan.id}:`, component);
+          // Try multiple ways to find the component using resolved componentId
+          let component = apiComponents.find(comp => comp.id === componentId);
+          if (!component) {
+            component = apiComponents.find(comp => comp.id === parseInt(componentId.toString()));
+          }
+          if (!component) {
+            component = apiComponents.find(comp => comp.id === Number(componentId));
+          }
+          if (!component) {
+            // Try string comparison
+            component = apiComponents.find(comp => comp.id.toString() === componentId.toString());
+          }
+          
+          console.log(`Found component for workplan ${workplan.id}:`, component);
+          console.log(`Component search details - workplan.componentId: ${componentId} (${typeof componentId}), available component IDs: ${apiComponents.map(c => `${c.id} (${typeof c.id})`).join(', ')}`);
             
             let projects: Project[] = [];
             
@@ -228,7 +369,8 @@ const WorkplanView: React.FC = () => {
             
             return {
               ...workplan,
-              component: component || { id: 0, name: 'Unknown Component' },
+              title: workplan.title || `${(component || { title: 'Unknown Component' }).title} Workplan`,
+              component: component || { id: 0, name: 'Unknown Component', title: 'Unknown Component' },
               projects
             };
           })
@@ -237,9 +379,9 @@ const WorkplanView: React.FC = () => {
         console.log('Initial workplans fetch - Final workplans with components:', workplansWithComponents);
         setWorkplans(workplansWithComponents);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load workplans';
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load data';
         setComponentsError(errorMessage);
-        console.error('Error fetching workplans:', err);
+        console.error('Error fetching data:', err);
       } finally {
         setIsLoadingComponents(false);
       }
@@ -247,6 +389,19 @@ const WorkplanView: React.FC = () => {
 
     fetchWorkplans();
   }, []);
+
+  // Debug effect to log component state changes
+  useEffect(() => {
+    console.log('Component state changed - isLoadingComponents:', isLoadingComponents, 'componentsError:', componentsError, 'availableComponents.length:', availableComponents.length);
+  }, [isLoadingComponents, componentsError, availableComponents.length]);
+
+  // Auto-reload components when workplan form is opened
+  useEffect(() => {
+    if (showCreateWorkplanForm && availableComponents.length === 0 && !isLoadingComponents) {
+      console.log('Workplan form opened but no components available, reloading...');
+      reloadComponents();
+    }
+  }, [showCreateWorkplanForm, availableComponents.length, isLoadingComponents]);
 
   // Fetch sub-components when a component is selected
   const fetchSubComponents = async (componentId: number) => {
@@ -356,6 +511,8 @@ const WorkplanView: React.FC = () => {
       
       const response = await workplanService.createWorkplan(workplanData);
       console.log('Workplan created successfully:', response);
+      console.log('Created workplan structure:', response.workplan);
+      console.log('Created workplan component_id:', response.workplan.component_id, 'type:', typeof response.workplan.component_id);
       
       // Refresh workplans after successful creation
       console.log('Refreshing workplans after creation...');
@@ -377,17 +534,111 @@ const WorkplanView: React.FC = () => {
       
       const workplansWithComponents: WorkplanWithComponent[] = await Promise.all(
         apiWorkplans.map(async (workplan) => {
-          // Add null check for component_id
-          if (!workplan.component_id) {
-            console.warn(`Workplan ${workplan.id} has no component_id`);
+          console.log(`Processing workplan ${workplan.id}:`, workplan);
+          console.log(`Workplan ${workplan.id} component_id:`, workplan.component_id, 'type:', typeof workplan.component_id);
+          console.log('Available components for mapping:', apiComponents.map(c => ({ id: c.id, name: c.name, type: typeof c.id })));
+          
+          // Check if workplan has component as string (API returns component name as string)
+          if ((workplan as any).component && typeof (workplan as any).component === 'string') {
+            console.log(`Workplan ${workplan.id} has component string:`, (workplan as any).component);
+            const componentName = (workplan as any).component;
+            
+            // Find the component by name in the available components
+            let component = apiComponents.find(comp => 
+              comp.name === componentName || 
+              comp.title === componentName ||
+              comp.name.toLowerCase() === componentName.toLowerCase() ||
+              comp.title.toLowerCase() === componentName.toLowerCase()
+            );
+            
+            if (component) {
+              console.log(`Found matching component for workplan ${workplan.id}:`, component);
+            } else {
+              console.warn(`No matching component found for "${componentName}" in workplan ${workplan.id}`);
+              // Create a component object from the string
+              component = {
+                id: 0,
+                name: componentName,
+                title: componentName,
+                description: '',
+                isActive: true
+              };
+              console.log(`Created component object from string for workplan ${workplan.id}:`, component);
+            }
+            
+            let projects: Project[] = [];
+            try {
+              projects = await projectService.getProjectsByWorkplan(workplan.id);
+            } catch (err) {
+              console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
+            }
+            
             return {
               ...workplan,
-              component: { id: 0, name: 'No Component' },
+              component,
+              projects
+            };
+          }
+          
+          // Check if workplan has embedded component object (fallback)
+          if ((workplan as any).component && typeof (workplan as any).component === 'object') {
+            console.log(`Workplan ${workplan.id} has embedded component object:`, (workplan as any).component);
+            const embeddedComponent = (workplan as any).component;
+            
+            // Use the embedded component directly
+            const component = {
+              id: embeddedComponent.id || 0,
+              name: embeddedComponent.name || embeddedComponent.title || 'Unknown Component',
+              title: embeddedComponent.title || embeddedComponent.name || 'Unknown Component',
+              description: embeddedComponent.description || '',
+              isActive: embeddedComponent.isActive ?? true
+            };
+            
+            console.log(`Using embedded component for workplan ${workplan.id}:`, component);
+            
+            let projects: Project[] = [];
+            try {
+              projects = await projectService.getProjectsByWorkplan(workplan.id);
+            } catch (err) {
+              console.error(`Error fetching projects for workplan ${workplan.id}:`, err);
+            }
+            
+            return {
+              ...workplan,
+              component,
+              projects
+            };
+          }
+          
+          // Fallback to component_id lookup if no embedded component
+          const componentId = workplan.component_id || (workplan as any).componentId || (workplan as any).component_id;
+          console.log(`Workplan ${workplan.id} resolved component_id:`, componentId);
+          
+          // Add null check for component_id
+          if (!componentId) {
+            console.warn(`Workplan ${workplan.id} has no component_id (checked component_id, componentId)`);
+            return {
+              ...workplan,
+              component: { id: 0, name: 'No Component', title: 'No Component' },
       projects: []
             };
           }
           
-          const component = apiComponents.find(comp => comp.id === workplan.component_id || comp.id === parseInt(workplan.component_id.toString()));
+          // Try multiple ways to find the component using resolved componentId
+          let component = apiComponents.find(comp => comp.id === componentId);
+          if (!component) {
+            component = apiComponents.find(comp => comp.id === parseInt(componentId.toString()));
+          }
+          if (!component) {
+            component = apiComponents.find(comp => comp.id === Number(componentId));
+          }
+          if (!component) {
+            // Try string comparison
+            component = apiComponents.find(comp => comp.id.toString() === componentId.toString());
+          }
+          
+          console.log(`Found component for workplan ${workplan.id}:`, component);
+          console.log(`Component search details - workplan.componentId: ${componentId} (${typeof componentId}), available component IDs: ${apiComponents.map(c => `${c.id} (${typeof c.id})`).join(', ')}`);
           let projects: Project[] = [];
           
             try {
@@ -398,7 +649,8 @@ const WorkplanView: React.FC = () => {
           
           return {
             ...workplan,
-            component: component || { id: 0, name: 'Unknown Component' },
+            title: workplan.title || `${(component || { title: 'Unknown Component' }).title} Workplan`,
+            component: component || { id: 0, name: 'Unknown Component', title: 'Unknown Component' },
             projects
           };
         })
@@ -603,17 +855,16 @@ const WorkplanView: React.FC = () => {
 
 
   const filteredWorkplans = workplans.filter(workplan => {
-    const matchesSearch = workplan.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      workplan.component.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      workplan.projects.some(project => 
-        project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (project.project_info.lead_implementation || '').toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSearch = (workplan.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (workplan.projects || []).some(project => 
+        (project.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (project.project_info?.lead_implementation || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     
     if (!statusFilter) return matchesSearch;
     
-    const hasMatchingStatus = workplan.projects.some(project => 
-      (project.project_info.status || '').toLowerCase() === statusFilter.toLowerCase()
+    const hasMatchingStatus = (workplan.projects || []).some(project => 
+      (project.project_info?.status || '').toLowerCase() === statusFilter.toLowerCase()
     );
     return matchesSearch && hasMatchingStatus;
   });
@@ -1084,6 +1335,7 @@ const WorkplanView: React.FC = () => {
                       onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     />
                   </div>
                   <div>
@@ -1100,6 +1352,7 @@ const WorkplanView: React.FC = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       placeholder="Enter file number"
                       required
+                      disabled={isLoadingProjects}
                     />
                   </div>
                   <div>
@@ -1111,6 +1364,7 @@ const WorkplanView: React.FC = () => {
                       onChange={(e) => setNewProject({ ...newProject, sub_component_id: parseInt(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     >
                       <option value={0}>Select Sub Component</option>
                       {availableSubComponents.map((subComp) => (
@@ -1132,6 +1386,7 @@ const WorkplanView: React.FC = () => {
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     />
                   </div>
                   <div>
@@ -1147,6 +1402,7 @@ const WorkplanView: React.FC = () => {
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     />
                   </div>
                   <div>
@@ -1162,6 +1418,7 @@ const WorkplanView: React.FC = () => {
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     />
                   </div>
                   <div>
@@ -1177,6 +1434,7 @@ const WorkplanView: React.FC = () => {
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     />
                   </div>
                   <div>
@@ -1192,6 +1450,7 @@ const WorkplanView: React.FC = () => {
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     />
                   </div>
                   <div>
@@ -1207,6 +1466,7 @@ const WorkplanView: React.FC = () => {
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     />
                   </div>
                   <div>
@@ -1221,6 +1481,7 @@ const WorkplanView: React.FC = () => {
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     >
                       <option value="">Select Method</option>
                       <option value="Open Tender">Open Tender</option>
@@ -1241,6 +1502,7 @@ const WorkplanView: React.FC = () => {
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      disabled={isLoadingProjects}
                     >
                       <option value="">Select Status</option>
                       <option value="in_progress">In Progress</option>
@@ -1253,15 +1515,18 @@ const WorkplanView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowCreateProjectForm(false)}
-                    className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                    className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isLoadingProjects}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                    disabled={isLoadingProjects}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-green-400 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    Create Project
+                    {isLoadingProjects && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {isLoadingProjects ? 'Creating...' : 'Create Project'}
                   </button>
                 </div>
               </form>
@@ -1474,7 +1739,11 @@ const WorkplanView: React.FC = () => {
           </select>
         </div>
         <button
-          onClick={() => setShowCreateWorkplanForm(true)}
+          onClick={async () => {
+            console.log('Opening workplan form, reloading components...');
+            await reloadComponents();
+            setShowCreateWorkplanForm(true);
+          }}
           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -1482,17 +1751,17 @@ const WorkplanView: React.FC = () => {
         </button>
       </div>
 
-      {/* Table */}
+      {/* Traditional Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Workplan Title
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                  Expand
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Component
+                  Title
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Sub-Component
@@ -1555,100 +1824,94 @@ const WorkplanView: React.FC = () => {
                   return (
                     <React.Fragment key={workplan.id}>
                       {/* Workplan Row */}
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <button
-                              onClick={() => toggleWorkplanExpansion(workplan.id.toString())}
-                          className="mr-2 p-1 hover:bg-gray-200 rounded transition-colors"
-                        >
-                              {isExpanded ? (
-                            <ChevronDown className="w-4 h-4 text-gray-500" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-gray-500" />
-                          )}
-                        </button>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                                {workplan.title}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                                {workplan.projects.length} projects
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {workplan.component.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                      -
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                      -
-                    </td>
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <button
+                            onClick={() => toggleWorkplanExpansion(workplan.id.toString())}
+                            className="p-1 hover:bg-gray-200 rounded transition-colors"
+                            title={isExpanded ? "Collapse" : "Expand"}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4 text-gray-500" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-gray-500" />
+                            )}
+                          </button>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-gray-400 text-sm">
-                      -
-                          </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                      -
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          <div className="text-sm font-medium text-gray-900">
+                            {workplan.title || 'Untitled Workplan'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                           -
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                      -
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
+                          -
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          -
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          -
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          -
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          -
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
                             onClick={() => handleViewWorkplanDetails(workplan)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                  
-                  {/* Project Rows (when expanded) */}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                      
+                      {/* Project Rows (when expanded) */}
                       {isExpanded && workplan.projects.map((project) => {
-                        console.log(`Looking for sub-component with ID: ${project.sub_component_id} (type: ${typeof project.sub_component_id})`);
-                        console.log('Available sub-components:', availableSubComponents.map(sub => ({ id: sub.id, title: sub.title, type: typeof sub.id })));
                         const subComponent = availableSubComponents.find(sub => sub.id === project.sub_component_id);
-                        console.log(`Found sub-component for project ${project.id}:`, subComponent);
+                        const projectTotal = getTotalFunding(project.project_info.ida_funding || 0, project.project_info.gcf_funding || 0);
+                        
                         return (
-                    <tr key={project.id} className="bg-gray-50 hover:bg-gray-100">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="ml-8">
-                          <div className="text-sm font-medium text-gray-900">
+                          <tr key={project.id} className="bg-gray-50 hover:bg-gray-100">
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              {/* Empty cell for expand column */}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="ml-6">
+                                <div className="text-sm font-medium text-gray-900">
                                   {project.title}
                                 </div>
                                 <div className="text-sm text-gray-500">
                                   File No: {project.project_info.file_no || 'N/A'}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              -
-                      </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {subComponent?.title || 'Unknown'}
-                      </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {project.project_info.procurement_method || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {subComponent?.title || 'Unknown'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {project.project_info.procurement_method || 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 project.project_info.status === 'completed' ? 'bg-green-100 text-green-800' :
                                 project.project_info.status === 'approved' ? 'bg-blue-100 text-blue-800' :
                                 project.project_info.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
                                 'bg-gray-100 text-gray-800'
                               }`}>
                                 {(project.project_info.status || 'N/A').replace('_', ' ').toUpperCase()}
-                        </span>
-                      </td>
+                              </span>
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
                               {formatCurrency(project.project_info.ida_funding || 0)}
                             </td>
@@ -1656,21 +1919,15 @@ const WorkplanView: React.FC = () => {
                               {formatCurrency(project.project_info.gcf_funding || 0)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
-                              {formatCurrency(getTotalFunding(project.project_info.ida_funding || 0, project.project_info.gcf_funding || 0))}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                                onClick={() => handleViewProjectDetails(project)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2 min-w-[120px] justify-center"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
+                              {formatCurrency(projectTotal)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                              -
+                            </td>
+                          </tr>
                         );
                       })}
-                </React.Fragment>
+                    </React.Fragment>
                   );
                 })
               )}
@@ -1698,17 +1955,14 @@ const WorkplanView: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Workplan Title
+                  <span className="text-xs text-green-600 ml-2">(Auto-generated from component)</span>
                 </label>
-                <input
-                  type="text"
-                  value={newWorkplan.title}
-                  onChange={(e) => {
-                    console.log('Title changed:', e.target.value);
-                    setNewWorkplan({ ...newWorkplan, title: e.target.value });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required
-                />
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700">
+                  {newWorkplan.component_id > 0 ? newWorkplan.title : "Select a component to see the workplan title"}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Workplan title is automatically generated from the selected component
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1724,22 +1978,76 @@ const WorkplanView: React.FC = () => {
                     value={newWorkplan.component_id}
                     onChange={(e) => {
                       console.log('Component changed:', e.target.value);
-                      setNewWorkplan({ ...newWorkplan, component_id: parseInt(e.target.value) });
+                      const selectedComponentId = parseInt(e.target.value);
+                      const selectedComponent = availableComponents.find(comp => comp.id === selectedComponentId);
+                      
+                      if (selectedComponent) {
+                        console.log('Auto-generating workplan title from component:', selectedComponent.title);
+                        // Auto-generate workplan title from component title
+                        const workplanTitle = `${selectedComponent.title} Workplan`;
+                        setNewWorkplan({ 
+                          ...newWorkplan, 
+                          component_id: selectedComponentId,
+                          title: workplanTitle
+                        });
+                      } else {
+                        setNewWorkplan({ 
+                          ...newWorkplan, 
+                          component_id: selectedComponentId,
+                          title: ''
+                        });
+                      }
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     required
                     disabled={isLoadingComponents}
                   >
                     <option value={0}>Select Component</option>
-                    {availableComponents.map((component) => (
-                      <option key={component.id} value={component.id}>
-                        {component.name}
-                      </option>
-                    ))}
+                    {availableComponents.map((component) => {
+                      console.log('Rendering component option:', component);
+                      return (
+                        <option key={component.id} value={component.id}>
+                          {component.name} - {component.title}
+                        </option>
+                      );
+                    })}
                   </select>
                 )}
                 {availableComponents.length === 0 && !isLoadingComponents && !componentsError && (
-                  <p className="text-sm text-gray-500 mt-1">No components available. Create components in Settings first.</p>
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500">No components available. Create components in Settings first.</p>
+                    <button
+                      type="button"
+                      onClick={reloadComponents}
+                      className="mt-2 text-sm text-green-600 hover:text-green-700 underline"
+                    >
+                      Refresh Components
+                    </button>
+                  </div>
+                )}
+                {componentsError && (
+                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600">{componentsError}</p>
+                    <button
+                      type="button"
+                      onClick={reloadComponents}
+                      className="mt-1 text-sm text-red-600 hover:text-red-700 underline"
+                    >
+                      Retry Loading Components
+                    </button>
+                  </div>
+                )}
+                {!isLoadingComponents && !componentsError && availableComponents.length === 0 && (
+                  <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-600">No components found. This might be a temporary issue.</p>
+                    <button
+                      type="button"
+                      onClick={reloadComponents}
+                      className="mt-1 text-sm text-yellow-600 hover:text-yellow-700 underline"
+                    >
+                      Try Loading Components Again
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="flex items-center justify-end space-x-3 pt-4">

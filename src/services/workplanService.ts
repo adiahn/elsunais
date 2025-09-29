@@ -3,8 +3,17 @@ import { apiClient } from '../config/api';
 // Workplan types
 export interface Workplan {
   id: number;
-  title: string;
-  component_id: number;
+  title?: string;
+  component_id?: number;
+  component?: string | {
+    id: number;
+    name: string;
+    title?: string;
+    description?: string;
+    isActive?: boolean;
+  };
+  created_by?: string;
+  date_created?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -70,8 +79,37 @@ class WorkplanService {
     try {
       console.log('Fetching workplans from API...');
       const response = await apiClient.get<Workplan[]>('/workplans');
+      console.log('Raw API response:', response);
+      console.log('Response data type:', typeof response.data);
+      console.log('Response data is array:', Array.isArray(response.data));
       console.log('Workplans fetched successfully:', response.data);
-      return response.data || [];
+      console.log('First workplan from API:', response.data?.[0]);
+      
+      // Handle different response structures
+      let workplans = response.data;
+      if (workplans && typeof workplans === 'object' && !Array.isArray(workplans)) {
+        // If response is wrapped in an object, try to extract the array
+        if (workplans.workplans && Array.isArray(workplans.workplans)) {
+          workplans = workplans.workplans;
+          console.log('Extracted workplans from wrapper object:', workplans);
+        } else if (workplans.data && Array.isArray(workplans.data)) {
+          workplans = workplans.data;
+          console.log('Extracted workplans from data property:', workplans);
+        }
+      }
+      
+      // Normalize field names if needed (convert camelCase to snake_case)
+      if (Array.isArray(workplans)) {
+        workplans = workplans.map(workplan => ({
+          ...workplan,
+          component_id: workplan.component_id || (workplan as any).componentId,
+          created_at: workplan.created_at || (workplan as any).createdAt,
+          updated_at: workplan.updated_at || (workplan as any).updatedAt
+        }));
+        console.log('Normalized workplans field names:', workplans);
+      }
+      
+      return workplans || [];
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as any;
