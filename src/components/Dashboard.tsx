@@ -9,12 +9,13 @@ import StoreManagerView from './views/StoreManagerView';
 import SettingsView from './views/SettingsView';
 import UserManagementView from './views/UserManagementView';
 import AdminView from './views/AdminView';
+import ProcurementView from './views/ProcurementView';
 
 interface DashboardProps {
   onLogout: () => void;
 }
 
-export type ViewType = 'dashboard' | 'workplan' | 'drivers' | 'accountant' | 'maintenance' | 'store-manager' | 'settings' | 'user-management' | 'admin';
+export type ViewType = 'dashboard' | 'workplan' | 'drivers' | 'accountant' | 'maintenance' | 'store-manager' | 'procurement' | 'settings' | 'user-management' | 'admin';
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
@@ -38,6 +39,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <UserManagementView />;
       case 'admin':
         return <AdminView />;
+      case 'procurement':
+        return <ProcurementView />;
       default:
         return <DashboardView />;
     }
