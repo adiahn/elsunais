@@ -97,6 +97,9 @@ const StoreManagerView: React.FC = () => {
       console.log('Attempting to fetch store items...');
       const apiItems = await storeService.getItems();
       
+      // Debug logging for items
+      console.log('Fetched items from API:', apiItems);
+      
       // Convert API items to local format
       const localItems: LocalStoreItem[] = apiItems.map(apiItem => ({
         id: apiItem.id?.toString() || '',
@@ -112,6 +115,8 @@ const StoreManagerView: React.FC = () => {
         date_updated: apiItem.date_updated,
         store_id: apiItem.store_id
       }));
+      
+      console.log('Converted local items:', localItems);
       
       setItems(localItems);
       console.log('Successfully fetched items:', localItems);
@@ -141,10 +146,29 @@ const StoreManagerView: React.FC = () => {
       }
       
       const apiRequests = await storeService.getRequests();
+      console.log('Fetched requests from API:', apiRequests);
       
       // Convert API requests to local format
       const localRequests: LocalItemRequest[] = apiRequests.map(apiReq => {
-        const itemType = items.find(item => item.id === apiReq.item_id.toString())?.type || 'consumable';
+        // Find the corresponding item - try both string and number matching
+        const item = items.find(item => 
+          item.id === apiReq.item_id.toString() || 
+          item.id === apiReq.item_id ||
+          parseInt(item.id) === apiReq.item_id
+        );
+        
+        const itemType = item?.type || 'consumable';
+        const itemName = item?.name || `Item ID: ${apiReq.item_id}`;
+        
+        // Debug logging
+        console.log('Processing request:', {
+          requestId: apiReq.id,
+          itemId: apiReq.item_id,
+          availableItems: items.map(i => ({ id: i.id, name: i.name })),
+          foundItem: item,
+          itemType,
+          itemName
+        });
         
         // For consumables: auto-approve, for non-consumables: need approval
         let status = apiReq.status || 'pending';
@@ -152,12 +176,12 @@ const StoreManagerView: React.FC = () => {
           status = 'approved'; // Auto-approve consumables
         }
         
-        const canReturn = itemType === 'non_consumable' && (status === 'issued' || status === 'approved');
+        const canReturn = itemType === 'non_consumable' && status === 'issued';
         
         return {
           id: apiReq.id?.toString() || '',
           itemId: apiReq.item_id.toString(),
-          itemName: items.find(item => item.id === apiReq.item_id.toString())?.name || 'Unknown Item',
+          itemName: itemName,
           itemType: itemType,
           quantity: apiReq.quantity,
           unit: 'units',
@@ -255,6 +279,22 @@ const StoreManagerView: React.FC = () => {
       console.error('Error deleting item:', err);
     } finally {
       setIsDeletingItem(false);
+    }
+  };
+
+  const handleIssueRequest = async (requestId: string) => {
+    try {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      
+      await storeService.issueRequest(parseInt(requestId));
+      
+      setSuccessMessage('Request issued successfully!');
+      fetchRequests(); // Refresh the requests list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to issue request';
+      setErrorMessage(errorMessage);
+      console.error('Error issuing request:', err);
     }
   };
 
@@ -681,6 +721,14 @@ const StoreManagerView: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
+                        {request.itemType === 'non_consumable' && request.status === 'approved' && (
+                          <button
+                            onClick={() => handleIssueRequest(request.id)}
+                            className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md text-xs font-medium transition-colors"
+                          >
+                            Issue Item
+                          </button>
+                        )}
                         {request.canReturn && (
                           <button
                             onClick={() => {

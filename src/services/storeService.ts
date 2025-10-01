@@ -261,12 +261,52 @@ class StoreService {
   }
 
   /**
+   * Issue an approved request
+   */
+  async issueRequest(requestId: number): Promise<{ message: string }> {
+    try {
+      console.log('Issuing request:', requestId);
+      const response = await apiClient.put<{ message: string }>(`/store/requests/${requestId}/issue`);
+      console.log('Issue request response:', response.data);
+      return response.data;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as any;
+        const status = axiosError.response?.status;
+        const message = axiosError.response?.data?.message || axiosError.response?.data?.error;
+        
+        if (status === 400) {
+          throw new Error(message || 'Invalid issue data. Please check your input.');
+        } else if (status === 401) {
+          throw new Error('Unauthorized. Please log in again.');
+        } else if (status === 404) {
+          throw new Error('Request not found.');
+        } else if (status === 500) {
+          throw new Error('Server error. Please try again later.');
+        } else if (status >= 500) {
+          throw new Error('Server is temporarily unavailable. Please try again later.');
+        } else if (status === 0 || !status) {
+          throw new Error('Network error. Please check your internet connection.');
+        } else {
+          throw new Error(message || 'Failed to issue request. Please try again.');
+        }
+      }
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to issue request. Please try again.';
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
    * Return a non-consumable item
    */
   async returnItem(requestId: number, notes?: string): Promise<{ message: string }> {
     try {
       console.log('Returning item:', requestId, notes);
-      const response = await apiClient.post<{ message: string }>(`/store/requests/${requestId}/return`, {
+      const response = await apiClient.put<{ message: string }>(`/store/requests/${requestId}/return`, {
         notes: notes || ''
       });
       console.log('Return item response:', response.data);
