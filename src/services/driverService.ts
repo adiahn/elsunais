@@ -2,46 +2,64 @@ import { apiClient } from '../config/api';
 
 // Driver Request types
 export interface DriverRequest {
-  id?: number;
+  id: number;
+  car_id: number;
   request_type: 'fuel' | 'maintenance' | 'repair' | 'inspection' | 'other';
-  liters?: number;
+  status: 'pending' | 'approved' | 'in_progress' | 'completed' | 'rejected';
+  total_cost: number;
+  // Additional fields that might be present
+  driver_id?: number;
+  liters_requested?: number;
   price_per_liter?: number;
   description?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
-  status?: 'pending' | 'approved' | 'in_progress' | 'completed' | 'rejected';
   requested_date?: string;
   location?: string;
   estimated_cost?: number;
-  vehicle_id?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CreateDriverRequestRequest {
+  driver_id: number;
+  car_id: number;
   request_type: 'fuel' | 'maintenance' | 'repair' | 'inspection' | 'other';
-  liters?: number;
+  liters_requested?: number;
   price_per_liter?: number;
   description?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   location?: string;
   estimated_cost?: number;
-  vehicle_id?: string;
 }
 
 export interface CreateDriverRequestResponse {
   message: string;
-  request_id?: number;
+  request_id: number;
+  status: 'pending' | 'approved' | 'in_progress' | 'completed' | 'rejected';
+  total_cost: number;
 }
 
 export interface DriverRequestsResponse {
   requests: DriverRequest[];
 }
 
+// Car types
+export interface Car {
+  id: number;
+  manufacturer: string;
+  model: string;
+  plate_number: string;
+  year: number;
+  assigned_to: string;
+}
+
 class DriverService {
   /**
    * Submit a driver request
    */
-  async submitRequest(driverId: number, data: CreateDriverRequestRequest): Promise<CreateDriverRequestResponse> {
+  async submitRequest(data: CreateDriverRequestRequest): Promise<CreateDriverRequestResponse> {
     try {
-      const response = await apiClient.post<CreateDriverRequestResponse>(`/drivers/${driverId}/requests`, data);
+      const response = await apiClient.post<CreateDriverRequestResponse>('/driver_requests', data);
       return response.data;
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
@@ -73,12 +91,12 @@ class DriverService {
   }
 
   /**
-   * Get driver requests
+   * Get driver requests by driver ID
    */
   async getDriverRequests(driverId: number): Promise<DriverRequest[]> {
     try {
-      const response = await apiClient.get<DriverRequestsResponse>(`/drivers/${driverId}/requests`);
-      return response.data.requests || [];
+      const response = await apiClient.get<DriverRequest[]>(`/driver_requests/${driverId}`);
+      return response.data || [];
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as any;
@@ -212,6 +230,40 @@ class DriverService {
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'Failed to delete request. Please try again.';
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Get all cars
+   */
+  async getCars(): Promise<Car[]> {
+    try {
+      const response = await apiClient.get<Car[]>('/cars');
+      return response.data || [];
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as any;
+        const status = axiosError.response?.status;
+        const message = axiosError.response?.data?.message || axiosError.response?.data?.error;
+        
+        if (status === 401) {
+          throw new Error('Unauthorized. Please log in again.');
+        } else if (status === 500) {
+          throw new Error('Server error. Please try again later.');
+        } else if (status >= 500) {
+          throw new Error('Server is temporarily unavailable. Please try again later.');
+        } else if (status === 0 || !status) {
+          throw new Error('Network error. Please check your internet connection.');
+        } else {
+          throw new Error(message || 'Failed to fetch cars. Please try again.');
+        }
+      }
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to fetch cars. Please try again.';
       
       throw new Error(errorMessage);
     }

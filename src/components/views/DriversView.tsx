@@ -1,80 +1,73 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Car, User, Wrench, Fuel, AlertTriangle, CheckCircle, XCircle, Clock as ClockIcon, Loader2, AlertCircle } from 'lucide-react';
-import { driverService, DriverRequest as ApiDriverRequest } from '../../services/driverService';
+import { Plus, Car, User, Wrench, Fuel, AlertTriangle, CheckCircle, XCircle, Clock as ClockIcon, Loader2, AlertCircle, Eye } from 'lucide-react';
+import { driverService, DriverRequest as ApiDriverRequest, Car as ApiCar } from '../../services/driverService';
 
 interface Vehicle {
-  id: string;
-  licensePlate: string;
-  make: string;
+  id: number;
+  manufacturer: string;
   model: string;
+  plate_number: string;
   year: number;
-  type: 'sedan' | 'suv' | 'truck' | 'van' | 'motorcycle';
-  assignedDriver?: string; // Driver ID
+  assigned_to: string;
 }
 
 interface Driver {
-  id: string;
+  id: number;
   name: string;
   employeeId: string;
   phone: string;
   email: string;
   licenseNumber: string;
   licenseExpiry: string;
-  assignedVehicle?: string; // Vehicle ID
+  assignedVehicle?: number; // Vehicle ID
   isActive: boolean;
 }
 
 interface DriverRequest {
-  id: string;
-  driverId: string;
-  vehicleId: string;
-  requestType: 'maintenance' | 'fueling' | 'repair' | 'inspection' | 'other';
-  description: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  id: number;
+  car_id: number;
+  request_type: 'fuel' | 'maintenance' | 'repair' | 'inspection' | 'other';
   status: 'pending' | 'approved' | 'in_progress' | 'completed' | 'rejected';
-  requestedDate: string;
-  estimatedCost?: number;
+  total_cost: number;
+  // Additional fields that might be present
+  driver_id?: number;
+  liters_requested?: number;
+  price_per_liter?: number;
+  description?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  requested_date?: string;
   location?: string;
-  attachments?: string[];
-  // Fueling specific fields
-  litresRequested?: number;
-  pricePerLitre?: number;
-  totalFuelCost?: number;
-  // Vehicle change justification
-  vehicleChangeReason?: string;
-}
-
-// Local driver request interface for UI compatibility
-interface LocalDriverRequest extends DriverRequest {
-  odometerReading?: number;
+  estimated_cost?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const DriversView: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>([
     {
-      id: '1',
+      id: 1,
       name: 'Yusuf Abdullahi',
       employeeId: 'EMP001',
       phone: '+234-801-234-5678',
       email: 'yusuf.abdullahi@company.com',
       licenseNumber: 'DL123456789',
       licenseExpiry: '2025-12-31',
-      assignedVehicle: '1',
+      assignedVehicle: 1,
       isActive: true
     },
     {
-      id: '2',
+      id: 2,
       name: 'Aisha Ibrahim',
       employeeId: 'EMP002',
       phone: '+234-802-345-6789',
       email: 'aisha.ibrahim@company.com',
       licenseNumber: 'DL987654321',
       licenseExpiry: '2026-06-15',
-      assignedVehicle: '2',
+      assignedVehicle: 2,
       isActive: true
     },
     {
-      id: '3',
+      id: 3,
       name: 'Ibrahim Sani',
       employeeId: 'EMP003',
       phone: '+234-803-456-7890',
@@ -85,58 +78,67 @@ const DriversView: React.FC = () => {
     }
   ]);
 
-  const [vehicles, setVehicles] = useState<Vehicle[]>([
-    {
-      id: '1',
-      licensePlate: 'ABC-123',
-      make: 'Toyota',
-      model: 'Camry',
-      year: 2022,
-      type: 'sedan',
-      assignedDriver: '1'
-    },
-    {
-      id: '2',
-      licensePlate: 'XYZ-789',
-      make: 'Ford',
-      model: 'Explorer',
-      year: 2021,
-      type: 'suv',
-      assignedDriver: '2'
-    },
-    {
-      id: '3',
-      licensePlate: 'DEF-456',
-      make: 'Chevrolet',
-      model: 'Silverado',
-      year: 2020,
-      type: 'truck'
-    }
-  ]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [isLoadingCars, setIsLoadingCars] = useState(false);
+  const [carsError, setCarsError] = useState<string | null>(null);
 
-  const [driverRequests, setDriverRequests] = useState<LocalDriverRequest[]>([]);
+  const [driverRequests, setDriverRequests] = useState<DriverRequest[]>([]);
   const [isLoadingRequests, setIsLoadingRequests] = useState(false);
   const [requestsError, setRequestsError] = useState<string | null>(null);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
-  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
-  const [selectedRequest, setSelectedRequest] = useState<DriverRequest | null>(null);
   const [showCreateRequestForm, setShowCreateRequestForm] = useState(false);
-  const [newRequest, setNewRequest] = useState<Omit<DriverRequest, 'id'>>({
-    driverId: '1', // Default to first driver
-    vehicleId: '1', // Default to first driver's assigned vehicle
-    requestType: 'maintenance',
+  const [newRequest, setNewRequest] = useState<{
+    driver_id: number;
+    car_id: number;
+    request_type: 'fuel' | 'maintenance' | 'repair' | 'inspection' | 'other';
+    liters_requested?: number;
+    price_per_liter?: number;
+    description?: string;
+    priority?: 'low' | 'medium' | 'high' | 'urgent';
+    location?: string;
+    estimated_cost?: number;
+  }>({
+    driver_id: 2, // Default to driver 2 as per API example
+    car_id: 1,
+    request_type: 'fuel',
+    liters_requested: 40,
+    price_per_liter: 750,
     description: '',
     priority: 'medium',
-    status: 'pending',
-    requestedDate: new Date().toISOString().split('T')[0],
-    litresRequested: 0,
-    pricePerLitre: 0,
-    totalFuelCost: 0,
-    vehicleChangeReason: ''
+    location: '',
+    estimated_cost: 0
   });
+
+  // Fetch cars on mount
+  useEffect(() => {
+    const fetchCars = async () => {
+      try {
+        setIsLoadingCars(true);
+        setCarsError(null);
+        
+        // Check if user is authenticated
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          setCarsError('Please log in to view cars');
+          return;
+        }
+        
+        const apiCars = await driverService.getCars();
+        setVehicles(apiCars);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load cars';
+        setCarsError(errorMessage);
+        console.error('Error fetching cars:', err);
+      } finally {
+        setIsLoadingCars(false);
+      }
+    };
+
+    fetchCars();
+  }, []);
 
   // Fetch driver requests on mount
   useEffect(() => {
@@ -152,29 +154,11 @@ const DriversView: React.FC = () => {
           return;
         }
         
-        // For now, use driver ID 1 (in real app, this would be the logged-in driver's ID)
-        const driverId = 1;
+        // For now, fetch requests for driver ID 2 (as per your example)
+        // In a real app, this would be the logged-in driver's ID
+        const driverId = 2;
         const apiRequests = await driverService.getDriverRequests(driverId);
-        
-        // Convert API requests to local format
-        const localRequests: LocalDriverRequest[] = apiRequests.map(apiReq => ({
-          id: apiReq.id?.toString() || '',
-          driverId: driverId.toString(),
-          vehicleId: apiReq.vehicle_id || '1',
-          requestType: apiReq.request_type === 'fuel' ? 'fueling' : apiReq.request_type as any,
-          description: apiReq.description || '',
-          priority: apiReq.priority || 'medium',
-          status: apiReq.status || 'pending',
-          requestedDate: apiReq.requested_date || new Date().toISOString().split('T')[0],
-          estimatedCost: apiReq.estimated_cost,
-          location: apiReq.location,
-          litresRequested: apiReq.liters,
-          pricePerLitre: apiReq.price_per_liter,
-          totalFuelCost: apiReq.liters && apiReq.price_per_liter ? apiReq.liters * apiReq.price_per_liter : 0,
-          odometerReading: 0 // This would come from the API in a real implementation
-        }));
-        
-        setDriverRequests(localRequests);
+        setDriverRequests(apiRequests);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load requests';
         setRequestsError(errorMessage);
@@ -187,11 +171,11 @@ const DriversView: React.FC = () => {
     fetchDriverRequests();
   }, []);
 
-  const getRequestTypeIcon = (type: DriverRequest['requestType']) => {
+  const getRequestTypeIcon = (type: DriverRequest['request_type']) => {
     switch (type) {
       case 'maintenance':
         return <Wrench className="w-4 h-4 text-blue-600" />;
-      case 'fueling':
+      case 'fuel':
         return <Fuel className="w-4 h-4 text-green-600" />;
       case 'repair':
         return <AlertTriangle className="w-4 h-4 text-red-600" />;
@@ -204,7 +188,7 @@ const DriversView: React.FC = () => {
     }
   };
 
-  const getPriorityColor = (priority: DriverRequest['priority']) => {
+  const getPriorityColor = (priority?: DriverRequest['priority']) => {
     switch (priority) {
       case 'low':
         return 'bg-gray-100 text-gray-800';
@@ -219,7 +203,7 @@ const DriversView: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: DriverRequest['status']) => {
+  const getStatusColor = (status?: DriverRequest['status']) => {
     switch (status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
@@ -244,72 +228,68 @@ const DriversView: React.FC = () => {
       setSubmitError(null);
       setSubmitSuccess(null);
       
-      // Calculate total fuel cost if it's a fueling request
-      let totalFuelCost = 0;
-      if (newRequest.requestType === 'fueling' && newRequest.litresRequested && newRequest.pricePerLitre) {
-        totalFuelCost = newRequest.litresRequested * newRequest.pricePerLitre;
+      // Validate required fields
+      if (!newRequest.driver_id || !newRequest.car_id || !newRequest.request_type) {
+        setSubmitError('Please fill in all required fields');
+        return;
       }
       
-      // Prepare API request data
-      const apiRequestData = {
-        request_type: newRequest.requestType === 'fueling' ? 'fuel' : newRequest.requestType as any,
-        liters: newRequest.requestType === 'fueling' ? newRequest.litresRequested : undefined,
-        price_per_liter: newRequest.requestType === 'fueling' ? newRequest.pricePerLitre : undefined,
-        description: newRequest.description,
-        priority: newRequest.priority,
-        location: newRequest.location,
-        estimated_cost: newRequest.estimatedCost,
-        vehicle_id: newRequest.vehicleId
+      // Validate fuel-specific fields
+      if (newRequest.request_type === 'fuel') {
+        if (!newRequest.liters_requested || newRequest.liters_requested <= 0) {
+          setSubmitError('Please enter a valid number of liters requested');
+          return;
+        }
+        if (!newRequest.price_per_liter || newRequest.price_per_liter <= 0) {
+          setSubmitError('Please enter a valid price per liter');
+          return;
+        }
+      }
+      
+      // Prepare API request data - only send required fields for the API
+      let apiRequestData: any = {
+        driver_id: newRequest.driver_id,
+        car_id: newRequest.car_id,
+        request_type: newRequest.request_type
       };
       
+      // Add fuel-specific fields only for fuel requests
+      if (newRequest.request_type === 'fuel') {
+        apiRequestData.liters_requested = newRequest.liters_requested;
+        apiRequestData.price_per_liter = newRequest.price_per_liter;
+      }
+      
       // Submit request to API
-      const driverId = 1; // In real app, this would be the logged-in driver's ID
-      const response = await driverService.submitRequest(driverId, apiRequestData);
+      console.log('Submitting request to API:', apiRequestData);
+      const response = await driverService.submitRequest(apiRequestData);
+      console.log('API response:', response);
       
       // Show success message
-      setSubmitSuccess('Request submitted successfully!');
+      setSubmitSuccess(`Request submitted successfully! Request ID: ${response.request_id}, Status: ${response.status}, Total Cost: ${formatCurrency(response.total_cost)}`);
       
       // Refresh the requests list
+      const driverId = 2; // Same as in useEffect
       const apiRequests = await driverService.getDriverRequests(driverId);
-      const localRequests: LocalDriverRequest[] = apiRequests.map(apiReq => ({
-        id: apiReq.id?.toString() || '',
-        driverId: driverId.toString(),
-        vehicleId: apiReq.vehicle_id || '1',
-        requestType: apiReq.request_type === 'fuel' ? 'fueling' : apiReq.request_type as any,
-        description: apiReq.description || '',
-        priority: apiReq.priority || 'medium',
-        status: apiReq.status || 'pending',
-        requestedDate: apiReq.requested_date || new Date().toISOString().split('T')[0],
-        estimatedCost: apiReq.estimated_cost,
-        location: apiReq.location,
-        litresRequested: apiReq.liters,
-        pricePerLitre: apiReq.price_per_liter,
-        totalFuelCost: apiReq.liters && apiReq.price_per_liter ? apiReq.liters * apiReq.price_per_liter : 0,
-        odometerReading: 0
-      }));
-      
-      setDriverRequests(localRequests);
+      setDriverRequests(apiRequests);
       
       // Reset form
       setNewRequest({
-        driverId: '1',
-        vehicleId: '1',
-        requestType: 'maintenance',
+        driver_id: 2,
+        car_id: 1,
+        request_type: 'fuel',
+        liters_requested: 40,
+        price_per_liter: 750,
         description: '',
         priority: 'medium',
-        status: 'pending',
-        requestedDate: new Date().toISOString().split('T')[0],
-        litresRequested: 0,
-        pricePerLitre: 0,
-        totalFuelCost: 0,
-        vehicleChangeReason: ''
+        location: '',
+        estimated_cost: 0
       });
       
       // Close form after a short delay
       setTimeout(() => {
         setShowCreateRequestForm(false);
         setSubmitSuccess(null);
-      }, 2000);
+      }, 3000);
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit request';
@@ -320,228 +300,208 @@ const DriversView: React.FC = () => {
     }
   };
 
-  const getDriverName = (driverId: string) => {
+  const getDriverName = (driverId: number) => {
     const driver = drivers.find(d => d.id === driverId);
     return driver ? driver.name : 'Unknown Driver';
   };
 
-  const getVehicleInfo = (vehicleId: string) => {
+  const getVehicleInfo = (vehicleId: number) => {
     const vehicle = vehicles.find(v => v.id === vehicleId);
-    return vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.licensePlate})` : 'Unknown Vehicle';
+    return vehicle ? `${vehicle.manufacturer} ${vehicle.model} (${vehicle.plate_number})` : 'Unknown Vehicle';
   };
 
-  const getDriverAssignedVehicle = (driverId: string) => {
-    const driver = drivers.find(d => d.id === driverId);
-    return driver?.assignedVehicle || '';
+  const calculateTotalAmount = (request: DriverRequest) => {
+    // Use total_cost from API response
+    return request.total_cost || 0;
   };
 
-  const isVehicleChanged = (selectedVehicleId: string, driverId: string) => {
-    const assignedVehicle = getDriverAssignedVehicle(driverId);
-    return selectedVehicleId !== assignedVehicle;
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
   };
 
   return (
     <div className="p-8">
-             {/* Header */}
-       <div className="flex items-center justify-between mb-8">
-         <div>
-           <h1 className="text-3xl font-bold text-gray-900">Driver Portal</h1>
-           <p className="text-gray-600 mt-2">Submit service requests for your vehicle</p>
-         </div>
-         <div className="flex items-center space-x-3">
-           <button
-             onClick={() => setShowCreateRequestForm(true)}
-             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-           >
-             <Plus className="w-4 h-4" />
-             Submit Request
-           </button>
-         </div>
-       </div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Driver Requests</h1>
+          <p className="text-gray-600 mt-2">Manage driver service requests</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowCreateRequestForm(true)}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Request
+          </button>
+        </div>
+      </div>
 
-       {/* Error Message */}
-       {requestsError && (
-         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
-           <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-           <p className="text-red-700 text-sm">{requestsError}</p>
-           <button
-             onClick={() => setRequestsError(null)}
-             className="ml-auto text-red-500 hover:text-red-700"
-           >
-             ×
-           </button>
-         </div>
-       )}
+      {/* Error Messages */}
+      {requestsError && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <p className="text-red-700 text-sm">{requestsError}</p>
+          <button
+            onClick={() => setRequestsError(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
-       {/* Success Message */}
-       {submitSuccess && (
-         <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-           <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-           <p className="text-green-700 text-sm">{submitSuccess}</p>
-           <button
-             onClick={() => setSubmitSuccess(null)}
-             className="ml-auto text-green-500 hover:text-green-700"
-           >
-             ×
-           </button>
-         </div>
-       )}
+      {carsError && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <p className="text-red-700 text-sm">{carsError}</p>
+          <button
+            onClick={() => setCarsError(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                 {/* My Requests List */}
-         <div className="lg:col-span-1">
-           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-             <h2 className="text-lg font-semibold text-gray-900 mb-4">My Requests</h2>
-             
-             {isLoadingRequests ? (
-               <div className="flex items-center justify-center py-8">
-                 <div className="flex items-center gap-2">
-                   <Loader2 className="w-5 h-5 animate-spin text-green-600" />
-                   <span className="text-gray-600">Loading requests...</span>
-                 </div>
-               </div>
-             ) : driverRequests.length === 0 ? (
-               <div className="text-center py-8">
-                 <Car className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                 <p className="text-gray-500 text-sm">No requests found</p>
-                 <p className="text-gray-400 text-xs mt-1">Submit your first request to get started</p>
-               </div>
-             ) : (
-               <div className="space-y-3">
-                 {driverRequests.map((request) => (
-                 <div
-                   key={request.id}
-                   onClick={() => setSelectedRequest(request)}
-                   className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                     selectedRequest?.id === request.id
-                       ? 'border-green-500 bg-green-50'
-                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                   }`}
-                 >
-                   <div className="flex items-center space-x-3">
-                     <div className="flex-shrink-0">
-                       <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                         {getRequestTypeIcon(request.requestType)}
-                       </div>
-                     </div>
-                     <div className="flex-1 min-w-0">
-                       <p className="text-sm font-medium text-gray-900 truncate capitalize">
-                         {request.requestType}
-                       </p>
-                       <p className="text-sm text-gray-500 truncate">
-                         {getVehicleInfo(request.vehicleId)}
-                       </p>
-                       <p className="text-xs text-gray-400">
-                         {request.requestedDate}
-                       </p>
-                     </div>
-                     <div className="flex-shrink-0">
-                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
-                         {request.status.replace('_', ' ')}
-                       </span>
-                     </div>
-                   </div>
-                 </div>
-                 ))}
-               </div>
-             )}
-           </div>
-         </div>
+      {/* Success Message */}
+      {submitSuccess && (
+        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+          <p className="text-green-700 text-sm">{submitSuccess}</p>
+          <button
+            onClick={() => setSubmitSuccess(null)}
+            className="ml-auto text-green-500 hover:text-green-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
-                 {/* Main Content */}
-         <div className="lg:col-span-2">
-           {selectedRequest ? (
-             <div className="space-y-6">
-               {/* Request Details */}
-               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Request Details</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   <div>
-                     <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Request Type</h3>
-                     <p className="text-lg font-semibold text-gray-800 capitalize">{selectedRequest.requestType}</p>
-                   </div>
-                   <div>
-                     <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Vehicle</h3>
-                     <p className="text-lg text-gray-800">{getVehicleInfo(selectedRequest.vehicleId)}</p>
-                   </div>
-                   <div>
-                     <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Status</h3>
-                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedRequest.status)}`}>
-                       {selectedRequest.status.replace('_', ' ')}
-                     </span>
-                   </div>
-                   <div>
-                     <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Priority</h3>
-                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getPriorityColor(selectedRequest.priority)}`}>
-                       {selectedRequest.priority}
-                     </span>
-                   </div>
-                   <div>
-                     <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Requested Date</h3>
-                     <p className="text-lg text-gray-800">{selectedRequest.requestedDate}</p>
-                   </div>
-                   <div>
-                     <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Location</h3>
-                     <p className="text-lg text-gray-800">{selectedRequest.location}</p>
-                   </div>
-                   {selectedRequest.odometerReading && (
-                     <div>
-                       <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Odometer Reading</h3>
-                       <p className="text-lg text-gray-800">{selectedRequest.odometerReading.toLocaleString()} km</p>
-                     </div>
-                   )}
-                   {selectedRequest.estimatedCost && (
-                     <div>
-                       <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Estimated Cost</h3>
-                       <p className="text-lg text-gray-800">${selectedRequest.estimatedCost}</p>
-                     </div>
-                   )}
-                   {selectedRequest.requestType === 'fueling' && selectedRequest.litresRequested && (
-                     <>
-                       <div>
-                         <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Litres Requested</h3>
-                         <p className="text-lg text-gray-800">{selectedRequest.litresRequested} L</p>
-                       </div>
-                       <div>
-                         <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Price per Litre</h3>
-                         <p className="text-lg text-gray-800">${selectedRequest.pricePerLitre}</p>
-                       </div>
-                       <div>
-                         <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Total Cost</h3>
-                         <p className="text-lg font-bold text-green-600">${selectedRequest.totalFuelCost}</p>
-                       </div>
-                     </>
-                   )}
-                   {selectedRequest.vehicleChangeReason && (
-                     <div className="md:col-span-2">
-                       <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Vehicle Change Reason</h3>
-                       <p className="text-lg text-gray-800">{selectedRequest.vehicleChangeReason}</p>
-                     </div>
-                   )}
-                 </div>
-                 <div className="mt-6">
-                   <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Description</h3>
-                   <p className="text-gray-800">{selectedRequest.description}</p>
-                 </div>
-               </div>
-             </div>
-           ) : (
-             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-               <div className="text-center py-12">
-                 <Car className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                 <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Request</h3>
-                 <p className="text-gray-500">Choose a request from the list to view its details.</p>
-               </div>
-             </div>
-           )}
-         </div>
+      {/* Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Request Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Driver
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Vehicle
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Priority
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {isLoadingRequests ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-green-600 mr-2" />
+                      <span className="text-gray-600">Loading requests...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : driverRequests.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center">
+                      <Car className="w-12 h-12 text-gray-300 mb-4" />
+                      <p className="text-gray-500 text-lg font-medium">No requests found</p>
+                      <p className="text-gray-400 text-sm mt-1">Submit your first request to get started</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                driverRequests.map((request) => (
+                  <tr key={request.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            {getRequestTypeIcon(request.request_type)}
+                          </div>
+                        </div>
+                        <div className="ml-3">
+                          <div className="text-sm font-medium text-gray-900 capitalize">
+                            {request.request_type}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {request.driver_id ? `Driver ${request.driver_id}` : 'Unknown Driver'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {getVehicleInfo(request.car_id)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
+                        {request.status?.replace('_', ' ') || 'Unknown'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(request.priority)}`}>
+                        {request.priority || 'Medium'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {formatCurrency(calculateTotalAmount(request))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {request.requested_date ? new Date(request.requested_date).toLocaleDateString() : 'N/A'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button className="text-green-600 hover:text-green-900 flex items-center gap-1">
+                        <Eye className="w-4 h-4" />
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Create Request Modal */}
       {showCreateRequestForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
           <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto relative shadow-2xl">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Submit Service Request</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Add New Request</h2>
             
             {/* Error Message */}
             {submitError && (
@@ -572,176 +532,104 @@ const DriversView: React.FC = () => {
             )}
             
             <form onSubmit={handleCreateRequest} className="space-y-4">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle</label>
-                   <select
-                     value={newRequest.vehicleId}
-                     onChange={(e) => setNewRequest({ ...newRequest, vehicleId: e.target.value })}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                     required
-                   >
-                     {vehicles.map((vehicle) => (
-                       <option key={vehicle.id} value={vehicle.id}>
-                         {vehicle.make} {vehicle.model} ({vehicle.licensePlate})
-                         {vehicle.id === getDriverAssignedVehicle(newRequest.driverId) ? ' (Assigned)' : ''}
-                       </option>
-                     ))}
-                   </select>
-                 </div>
-                 
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2">Request Type</label>
-                   <select
-                     value={newRequest.requestType}
-                     onChange={(e) => setNewRequest({ ...newRequest, requestType: e.target.value as DriverRequest['requestType'] })}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                     required
-                   >
-                     <option value="maintenance">Maintenance</option>
-                     <option value="fueling">Fueling</option>
-                     <option value="repair">Repair</option>
-                     <option value="inspection">Inspection</option>
-                     <option value="other">Other</option>
-                   </select>
-                 </div>
-                 
-                 {/* Vehicle change reason - only show if vehicle is different from assigned */}
-                 {isVehicleChanged(newRequest.vehicleId, newRequest.driverId) && (
-                   <div className="md:col-span-2">
-                     <label className="block text-sm font-medium text-gray-700 mb-2">Why are you using a different vehicle?</label>
-                     <input
-                       type="text"
-                       value={newRequest.vehicleChangeReason || ''}
-                       onChange={(e) => setNewRequest({ ...newRequest, vehicleChangeReason: e.target.value })}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       placeholder="Explain why you're using a different vehicle"
-                       required
-                     />
-                   </div>
-                 )}
-                 
-                 {/* Fueling specific fields */}
-                 {newRequest.requestType === 'fueling' && (
-                   <>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Litres Requested</label>
-                       <input
-                         type="number"
-                         value={newRequest.litresRequested || ''}
-                         onChange={(e) => {
-                           const litres = Number(e.target.value);
-                           const price = newRequest.pricePerLitre || 0;
-                           setNewRequest({ 
-                             ...newRequest, 
-                             litresRequested: litres,
-                             totalFuelCost: litres * price
-                           });
-                         }}
-                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                         placeholder="Enter litres needed"
-                         required
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-2">Price per Litre ($)</label>
-                       <input
-                         type="number"
-                         step="0.01"
-                         value={newRequest.pricePerLitre || ''}
-                         onChange={(e) => {
-                           const price = Number(e.target.value);
-                           const litres = newRequest.litresRequested || 0;
-                           setNewRequest({ 
-                             ...newRequest, 
-                             pricePerLitre: price,
-                             totalFuelCost: litres * price
-                           });
-                         }}
-                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                         placeholder="Enter current fuel price"
-                         required
-                       />
-                     </div>
-                     <div className="md:col-span-2">
-                       <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                         <div className="flex items-center justify-between">
-                           <span className="text-sm font-medium text-green-800">Total Cost:</span>
-                           <span className="text-lg font-bold text-green-600">
-                             ${newRequest.totalFuelCost?.toFixed(2) || '0.00'}
-                           </span>
-                         </div>
-                       </div>
-                     </div>
-                   </>
-                 )}
-                 
-                 {/* Location - only required for fueling and repair */}
-                 {(newRequest.requestType === 'fueling' || newRequest.requestType === 'repair') && (
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                     <input
-                       type="text"
-                       value={newRequest.location || ''}
-                       onChange={(e) => setNewRequest({ ...newRequest, location: e.target.value })}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       placeholder="Enter location"
-                       required
-                     />
-                   </div>
-                 )}
-                 
-                 
-                 {/* Priority - only for repair and other */}
-                 {(newRequest.requestType === 'repair' || newRequest.requestType === 'other') && (
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
-                     <select
-                       value={newRequest.priority}
-                       onChange={(e) => setNewRequest({ ...newRequest, priority: e.target.value as DriverRequest['priority'] })}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       required
-                     >
-                       <option value="low">Low</option>
-                       <option value="medium">Medium</option>
-                       <option value="high">High</option>
-                       <option value="urgent">Urgent</option>
-                     </select>
-                   </div>
-                 )}
-                 
-                 {/* Estimated cost - only for repair */}
-                 {newRequest.requestType === 'repair' && (
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Cost ($)</label>
-                     <input
-                       type="number"
-                       value={newRequest.estimatedCost || ''}
-                       onChange={(e) => setNewRequest({ ...newRequest, estimatedCost: Number(e.target.value) })}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                       placeholder="Enter estimated cost"
-                     />
-                   </div>
-                 )}
-               </div>
-               
-               <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                 <textarea
-                   value={newRequest.description}
-                   onChange={(e) => setNewRequest({ ...newRequest, description: e.target.value })}
-                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                   rows={3}
-                   placeholder={
-                     newRequest.requestType === 'maintenance' ? 'Describe the maintenance needed (e.g., oil change, tire rotation)' :
-                     newRequest.requestType === 'fueling' ? 'Describe fueling details (e.g., fuel type, station name)' :
-                     newRequest.requestType === 'repair' ? 'Describe the repair needed and symptoms' :
-                     newRequest.requestType === 'inspection' ? 'Describe what needs to be inspected' :
-                     'Describe the request'
-                   }
-                   required
-                 />
-               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Driver</label>
+                  <select
+                    value={newRequest.driver_id}
+                    onChange={(e) => setNewRequest({ ...newRequest, driver_id: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  >
+                    {drivers.map((driver) => (
+                      <option key={driver.id} value={driver.id}>
+                        {driver.name} ({driver.employeeId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle</label>
+                  <select
+                    value={newRequest.car_id}
+                    onChange={(e) => setNewRequest({ ...newRequest, car_id: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                    disabled={isLoadingCars}
+                  >
+                    {isLoadingCars ? (
+                      <option value="">Loading vehicles...</option>
+                    ) : vehicles.length === 0 ? (
+                      <option value="">No vehicles available</option>
+                    ) : (
+                      vehicles.map((vehicle) => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {vehicle.manufacturer} {vehicle.model} ({vehicle.plate_number})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Request Type</label>
+                  <select
+                    value={newRequest.request_type}
+                    onChange={(e) => setNewRequest({ ...newRequest, request_type: e.target.value as DriverRequest['request_type'] })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="fuel">Fuel</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="repair">Repair</option>
+                    <option value="inspection">Inspection</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                
+                {/* Fuel specific fields - only show for fuel requests */}
+                {newRequest.request_type === 'fuel' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Liters Requested *</label>
+                      <input
+                        type="number"
+                        value={newRequest.liters_requested || ''}
+                        onChange={(e) => setNewRequest({ ...newRequest, liters_requested: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Enter liters needed"
+                        required
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Price per Liter (₦) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={newRequest.price_per_liter || ''}
+                        onChange={(e) => setNewRequest({ ...newRequest, price_per_liter: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Enter current fuel price"
+                        required
+                        min="0.01"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-green-800">Total Cost:</span>
+                          <span className="text-lg font-bold text-green-600">
+                            {formatCurrency((newRequest.liters_requested || 0) * (newRequest.price_per_liter || 0))}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+              
               <div className="flex items-center justify-end space-x-3 pt-4">
                 <button
                   type="button"
@@ -761,7 +649,7 @@ const DriversView: React.FC = () => {
                   disabled={isSubmittingRequest}
                 >
                   {isSubmittingRequest && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {isSubmittingRequest ? 'Submitting...' : 'Submit Request'}
+                  {isSubmittingRequest ? 'Submitting to API...' : 'Submit Request'}
                 </button>
               </div>
             </form>
