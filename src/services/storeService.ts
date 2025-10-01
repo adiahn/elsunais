@@ -5,27 +5,35 @@ export interface StoreItem {
   id?: number;
   name: string;
   description: string;
-  is_consumable: boolean;
+  item_type: 'consumable' | 'non-consumable';
   quantity: number;
+  created_by_id?: number;
+  date_created?: string;
+  date_updated?: string;
+  store_id?: number;
 }
 
 export interface CreateStoreItemRequest {
   name: string;
   description: string;
-  is_consumable: boolean;
+  item_type: 'consumable' | 'non-consumable';
   quantity: number;
 }
 
 export interface UpdateStoreItemRequest {
   name?: string;
   description?: string;
-  is_consumable?: boolean;
+  item_type?: 'consumable' | 'non-consumable';
   quantity?: number;
 }
 
 export interface CreateStoreItemResponse {
+  id: number;
+  item_type: 'consumable' | 'non-consumable';
   message: string;
-  item_id?: number;
+  name: string;
+  quantity: number;
+  store_id: number;
 }
 
 export interface StoreItemsResponse {
@@ -70,7 +78,7 @@ class StoreService {
   async createItem(data: CreateStoreItemRequest): Promise<CreateStoreItemResponse> {
     try {
       console.log('Creating store item:', data);
-      const response = await apiClient.post<CreateStoreItemResponse>('/store/items', data);
+      const response = await apiClient.post<CreateStoreItemResponse>('/store/1/items', data);
       console.log('Create item response:', response.data);
       return response.data;
     } catch (error: unknown) {
@@ -108,9 +116,9 @@ class StoreService {
   async getItems(): Promise<StoreItem[]> {
     try {
       console.log('Fetching store items...');
-      const response = await apiClient.get<StoreItemsResponse>('/store/items');
+      const response = await apiClient.get<StoreItem[]>('/items');
       console.log('Store items response:', response.data);
-      return response.data.items || [];
+      return response.data || [];
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as any;
@@ -145,7 +153,9 @@ class StoreService {
    */
   async updateItem(itemId: number, data: UpdateStoreItemRequest): Promise<StoreItem> {
     try {
+      console.log('Updating store item:', itemId, data);
       const response = await apiClient.put<StoreItem>(`/store/items/${itemId}`, data);
+      console.log('Update item response:', response.data);
       return response.data;
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
@@ -251,14 +261,56 @@ class StoreService {
   }
 
   /**
+   * Return a non-consumable item
+   */
+  async returnItem(requestId: number, notes?: string): Promise<{ message: string }> {
+    try {
+      console.log('Returning item:', requestId, notes);
+      const response = await apiClient.post<{ message: string }>(`/store/requests/${requestId}/return`, {
+        notes: notes || ''
+      });
+      console.log('Return item response:', response.data);
+      return response.data;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as any;
+        const status = axiosError.response?.status;
+        const message = axiosError.response?.data?.message || axiosError.response?.data?.error;
+        
+        if (status === 400) {
+          throw new Error(message || 'Invalid return data. Please check your input.');
+        } else if (status === 401) {
+          throw new Error('Unauthorized. Please log in again.');
+        } else if (status === 404) {
+          throw new Error('Request not found.');
+        } else if (status === 500) {
+          throw new Error('Server error. Please try again later.');
+        } else if (status >= 500) {
+          throw new Error('Server is temporarily unavailable. Please try again later.');
+        } else if (status === 0 || !status) {
+          throw new Error('Network error. Please check your internet connection.');
+        } else {
+          throw new Error(message || 'Failed to return item. Please try again.');
+        }
+      }
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to return item. Please try again.';
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
    * Get all store requests
    */
   async getRequests(): Promise<StoreRequest[]> {
     try {
       console.log('Fetching store requests...');
-      const response = await apiClient.get<StoreRequestsResponse>('/store/requests');
+      const response = await apiClient.get<StoreRequest[]>('/store_requests');
       console.log('Store requests response:', response.data);
-      return response.data.requests || [];
+      return response.data || [];
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as any;
