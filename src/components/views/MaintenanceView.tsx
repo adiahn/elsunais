@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Plus, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, Building, Wrench, Settings, Users, Phone, Mail, Calendar, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, Building, Wrench, Settings, Users, Phone, Mail, Calendar, X, Loader2, AlertCircle } from 'lucide-react';
+import { maintenanceService, MaintenanceRequest, CreateMaintenanceRequest, MaintenanceStats } from '../../services/maintenanceService';
 
-interface MaintenanceRequest {
+// Local interface for UI compatibility
+interface LocalMaintenanceRequest {
   id: string;
   title: string;
   description: string;
@@ -20,79 +22,96 @@ interface MaintenanceRequest {
 }
 
 const MaintenanceView: React.FC = () => {
-  const [requests, setRequests] = useState<MaintenanceRequest[]>([
-    {
-      id: '1',
-      title: 'Office Supplies Purchase',
-      description: 'Purchase of stationery, paper, and office equipment',
-      category: 'office_supplies',
-      amount: 500,
-      priority: 'medium',
-      status: 'pending',
-      requestDate: '2025-01-20',
-      requestedBy: 'Aisha Ibrahim',
-      department: 'Administration',
-      vendor: 'Office Depot'
-    },
-    {
-      id: '2',
-      title: 'Air Conditioning Repair',
-      description: 'Repair of main office air conditioning unit',
-      category: 'equipment',
-      amount: 1200,
-      priority: 'high',
-      status: 'approved',
-      requestDate: '2025-01-18',
-      approvedDate: '2025-01-19',
-      requestedBy: 'Yusuf Abdullahi',
-      department: 'Facilities',
-      vendor: 'Cool Air Services'
-    },
-    {
-      id: '3',
-      title: 'Monthly Internet Bill',
-      description: 'Payment for office internet services',
-      category: 'utilities',
-      amount: 300,
-      priority: 'medium',
-      status: 'processing',
-      requestDate: '2025-01-15',
-      approvedDate: '2025-01-16',
-      requestedBy: 'Ibrahim Sani',
-      department: 'IT',
-      vendor: 'Internet Provider Co.'
-    },
-    {
-      id: '4',
-      title: 'Office Cleaning Service',
-      description: 'Weekly cleaning service for office premises',
-      category: 'cleaning',
-      amount: 800,
-      priority: 'low',
-      status: 'completed',
-      requestDate: '2025-01-10',
-      approvedDate: '2025-01-12',
-      paymentDate: '2025-01-15',
-      requestedBy: 'Aminu Garba',
-      department: 'Facilities',
-      vendor: 'Clean Pro Services',
-      receipt: 'receipt_004.pdf'
-    }
-  ]);
+  // API state
+  const [requests, setRequests] = useState<LocalMaintenanceRequest[]>([]);
+  const [stats, setStats] = useState<MaintenanceStats | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
+  // UI state
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<MaintenanceRequest | null>(null);
-  const [newRequest, setNewRequest] = useState<Omit<MaintenanceRequest, 'id' | 'status' | 'requestDate'>>({
+  const [selectedRequest, setSelectedRequest] = useState<LocalMaintenanceRequest | null>(null);
+  const [newRequest, setNewRequest] = useState<CreateMaintenanceRequest>({
     title: '',
-    description: '',
     category: 'office_supplies',
-    amount: 0,
+    details: {
+      location: '',
+      issue: '',
+      requested_by: ''
+    },
     priority: 'medium',
-    requestedBy: '',
-    department: '',
-    vendor: '',
-    notes: ''
+    amount: 0,
+    notes: '',
+    vendor: ''
   });
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetchRequests();
+    fetchStats();
+  }, []);
+
+  const fetchRequests = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setError('Please log in to view maintenance requests');
+        return;
+      }
+      
+      const apiRequests = await maintenanceService.getMaintenanceRequests();
+      console.log('Fetched maintenance requests from API:', apiRequests);
+      
+      // Convert API requests to local format
+      const localRequests: LocalMaintenanceRequest[] = apiRequests.map(apiReq => ({
+        id: apiReq.id.toString(),
+        title: apiReq.title,
+        description: apiReq.details.issue,
+        category: apiReq.category,
+        amount: apiReq.amount || 0,
+        priority: apiReq.priority,
+        status: apiReq.status === 'in_progress' ? 'processing' : apiReq.status,
+        requestDate: apiReq.requested_date,
+        approvedDate: apiReq.approved_date,
+        paymentDate: apiReq.completed_date,
+        requestedBy: apiReq.details.requested_by,
+        department: 'General', // Default department since API doesn't have this
+        vendor: apiReq.vendor,
+        receipt: apiReq.receipt,
+        notes: apiReq.notes
+      }));
+      
+      setRequests(localRequests);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load maintenance requests';
+      setError(errorMessage);
+      console.error('Error fetching maintenance requests:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        return;
+      }
+      
+      const apiStats = await maintenanceService.getMaintenanceStats();
+      setStats(apiStats);
+    } catch (err) {
+      console.error('Error fetching maintenance stats:', err);
+      // Don't set error for stats, just log it
+    }
+  };
 
   const getCategoryIcon = (category: MaintenanceRequest['category']) => {
     switch (category) {
@@ -185,56 +204,88 @@ const MaintenanceView: React.FC = () => {
     }
   };
 
-  const handleCreateRequest = (e: React.FormEvent) => {
+  const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    const request: MaintenanceRequest = {
-      ...newRequest,
-      id: Date.now().toString(),
-      status: 'pending',
-      requestDate: new Date().toISOString().split('T')[0]
-    };
-    setRequests([...requests, request]);
-    setNewRequest({
-      title: '',
-      description: '',
-      category: 'office_supplies',
-      amount: 0,
-      priority: 'medium',
-      requestedBy: '',
-      department: '',
-      vendor: '',
-      notes: ''
-    });
-    setShowCreateForm(false);
+    try {
+      setIsCreating(true);
+      setError(null);
+      setSuccess(null);
+      
+      await maintenanceService.createMaintenanceRequest(newRequest);
+      setSuccess('Maintenance request created successfully!');
+      setNewRequest({
+        title: '',
+        category: 'office_supplies',
+        details: {
+          location: '',
+          issue: '',
+          requested_by: ''
+        },
+        priority: 'medium',
+        amount: 0,
+        notes: '',
+        vendor: ''
+      });
+      setShowCreateForm(false);
+      fetchRequests(); // Refresh requests list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create maintenance request';
+      setError(errorMessage);
+      console.error('Error creating maintenance request:', err);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const handleApproveRequest = (requestId: string) => {
-    setRequests(requests.map(request => 
-      request.id === requestId 
-        ? { ...request, status: 'approved', approvedDate: new Date().toISOString().split('T')[0] }
-        : request
-    ));
+  const handleApproveRequest = async (requestId: string) => {
+    try {
+      setError(null);
+      setSuccess(null);
+      
+      await maintenanceService.approveMaintenanceRequest(parseInt(requestId));
+      setSuccess('Maintenance request approved successfully!');
+      fetchRequests(); // Refresh requests list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve maintenance request';
+      setError(errorMessage);
+      console.error('Error approving maintenance request:', err);
+    }
   };
 
-  const handleRejectRequest = (requestId: string) => {
-    setRequests(requests.map(request => 
-      request.id === requestId 
-        ? { ...request, status: 'rejected' }
-        : request
-    ));
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      setError(null);
+      setSuccess(null);
+      
+      await maintenanceService.rejectMaintenanceRequest(parseInt(requestId), 'Request rejected');
+      setSuccess('Maintenance request rejected successfully!');
+      fetchRequests(); // Refresh requests list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reject maintenance request';
+      setError(errorMessage);
+      console.error('Error rejecting maintenance request:', err);
+    }
   };
 
-  const handleMarkAsCompleted = (requestId: string) => {
-    setRequests(requests.map(request => 
-      request.id === requestId 
-        ? { ...request, status: 'completed', paymentDate: new Date().toISOString().split('T')[0] }
-        : request
-    ));
+  const handleMarkAsCompleted = async (requestId: string) => {
+    try {
+      setError(null);
+      setSuccess(null);
+      
+      await maintenanceService.completeMaintenanceRequest(parseInt(requestId));
+      setSuccess('Maintenance request completed successfully!');
+      fetchRequests(); // Refresh requests list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to complete maintenance request';
+      setError(errorMessage);
+      console.error('Error completing maintenance request:', err);
+    }
   };
 
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const approvedRequests = requests.filter(r => r.status === 'approved');
   const processingRequests = requests.filter(r => r.status === 'processing');
+  const completedRequests = requests.filter(r => r.status === 'completed');
 
   return (
     <div className="p-8">
@@ -253,13 +304,43 @@ const MaintenanceView: React.FC = () => {
         </button>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <p className="text-red-700 text-sm">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {success && (
+        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+          <p className="text-green-700 text-sm">{success}</p>
+          <button
+            onClick={() => setSuccess(null)}
+            className="ml-auto text-green-500 hover:text-green-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Pending Requests</p>
-              <p className="text-2xl font-bold text-yellow-600">{pendingRequests.length}</p>
+              <p className="text-2xl font-bold text-yellow-600">
+                {stats ? stats.pending_requests : pendingRequests.length}
+              </p>
             </div>
             <Clock className="w-8 h-8 text-yellow-600" />
           </div>
@@ -268,7 +349,9 @@ const MaintenanceView: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Approved</p>
-              <p className="text-2xl font-bold text-green-600">{approvedRequests.length}</p>
+              <p className="text-2xl font-bold text-green-600">
+                {stats ? stats.approved_requests : approvedRequests.length}
+              </p>
             </div>
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
@@ -276,10 +359,12 @@ const MaintenanceView: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Processing</p>
-              <p className="text-2xl font-bold text-blue-600">{processingRequests.length}</p>
+              <p className="text-sm font-medium text-gray-600">Completed</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {stats ? stats.completed_requests : completedRequests.length}
+              </p>
             </div>
-            <AlertTriangle className="w-8 h-8 text-blue-600" />
+            <CheckCircle className="w-8 h-8 text-blue-600" />
           </div>
         </div>
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -287,7 +372,7 @@ const MaintenanceView: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Total Amount</p>
               <p className="text-2xl font-bold text-purple-600">
-                ${requests.reduce((sum, r) => sum + r.amount, 0).toLocaleString()}
+                ${stats ? stats.total_amount.toLocaleString() : requests.reduce((sum, r) => sum + r.amount, 0).toLocaleString()}
               </p>
             </div>
             <DollarSign className="w-8 h-8 text-purple-600" />
@@ -302,6 +387,20 @@ const MaintenanceView: React.FC = () => {
           <p className="text-sm text-gray-600 mt-1">Click on a request to view details and take actions</p>
         </div>
         <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                <span className="text-gray-600">Loading maintenance requests...</span>
+              </div>
+            </div>
+          ) : requests.length === 0 ? (
+            <div className="text-center py-12">
+              <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-sm">No maintenance requests found</p>
+              <p className="text-gray-400 text-xs mt-1">Create your first maintenance request to get started</p>
+            </div>
+          ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -402,6 +501,7 @@ const MaintenanceView: React.FC = () => {
               ))}
             </tbody>
           </table>
+          )}
         </div>
       </div>
 
@@ -556,13 +656,46 @@ const MaintenanceView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Issue Description</label>
                 <textarea
-                  value={newRequest.description}
-                  onChange={(e) => setNewRequest({...newRequest, description: e.target.value})}
+                  value={newRequest.details.issue}
+                  onChange={(e) => setNewRequest({
+                    ...newRequest, 
+                    details: {...newRequest.details, issue: e.target.value}
+                  })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   rows={3}
-                  placeholder="Describe the maintenance request"
+                  placeholder="Describe the maintenance issue"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                <input
+                  type="text"
+                  value={newRequest.details.location}
+                  onChange={(e) => setNewRequest({
+                    ...newRequest, 
+                    details: {...newRequest.details, location: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter location (e.g., Office Block A)"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Requested By</label>
+                <input
+                  type="text"
+                  value={newRequest.details.requested_by}
+                  onChange={(e) => setNewRequest({
+                    ...newRequest, 
+                    details: {...newRequest.details, requested_by: e.target.value}
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter your name"
                   required
                 />
               </div>
@@ -669,14 +802,17 @@ const MaintenanceView: React.FC = () => {
                   type="button"
                   onClick={() => setShowCreateForm(false)}
                   className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                  disabled={isCreating}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={isCreating}
                 >
-                  Submit Request
+                  {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isCreating ? 'Creating Request...' : 'Submit Request'}
                 </button>
               </div>
             </form>

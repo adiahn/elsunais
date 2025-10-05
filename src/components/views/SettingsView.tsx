@@ -18,10 +18,12 @@ import {
   CheckCircle,
   RefreshCw,
   Search,
-  Filter
+  Filter,
+  Car as CarIcon
 } from 'lucide-react';
 import { componentService, Component } from '../../services/componentService';
 import { deductionService, Deduction, CreateDeductionRequest } from '../../services/deductionService';
+import { carService, Car, CreateCarRequest } from '../../services/carService';
 
 interface LocalComponent extends Component {
   title: string;
@@ -31,11 +33,13 @@ interface LocalComponent extends Component {
 
 
 const SettingsView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'components' | 'deductions'>('components');
+  const [activeTab, setActiveTab] = useState<'components' | 'deductions' | 'cars'>('components');
   const [components, setComponents] = useState<LocalComponent[]>([]);
   const [deductions, setDeductions] = useState<Deduction[]>([]);
+  const [cars, setCars] = useState<Car[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDeductions, setIsLoadingDeductions] = useState(false);
+  const [isLoadingCars, setIsLoadingCars] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,14 +47,24 @@ const SettingsView: React.FC = () => {
 
   const [showComponentForm, setShowComponentForm] = useState(false);
   const [showDeductionForm, setShowDeductionForm] = useState(false);
+  const [showCarForm, setShowCarForm] = useState(false);
   const [editingComponent, setEditingComponent] = useState<LocalComponent | null>(null);
   const [editingDeduction, setEditingDeduction] = useState<Deduction | null>(null);
+  const [editingCar, setEditingCar] = useState<Car | null>(null);
   const [newComponent, setNewComponent] = useState({ name: '', title: '', description: '' });
   const [newDeduction, setNewDeduction] = useState<CreateDeductionRequest>({
     activity_id: 1, // Auto-generated/default
     amount: 0,
     description: '',
     is_percentage: false
+  });
+  const [newCar, setNewCar] = useState<CreateCarRequest>({
+    plate_number: '',
+    model: '',
+    manufacturer: '',
+    year: new Date().getFullYear(),
+    user_id: 1, // Default driver
+    created_by: 1 // Auto-generated/default
   });
 
   // Load data on mount
@@ -60,6 +74,7 @@ const SettingsView: React.FC = () => {
     console.log('Auth token exists:', !!token);
     loadComponents();
     loadDeductions();
+    loadCars();
   }, []);
 
   const loadComponents = async () => {
@@ -115,6 +130,23 @@ const SettingsView: React.FC = () => {
       setDeductions([]);
     } finally {
       setIsLoadingDeductions(false);
+    }
+  };
+
+  const loadCars = async () => {
+    try {
+      setIsLoadingCars(true);
+      setError(null);
+      console.log('Loading cars...');
+      const apiCars = await carService.getCars();
+      console.log('Cars API response:', apiCars);
+      setCars(apiCars);
+    } catch (err) {
+      console.error('Error loading cars:', err);
+      // Don't set error for cars as it's not critical
+      setCars([]);
+    } finally {
+      setIsLoadingCars(false);
     }
   };
 
@@ -329,17 +361,142 @@ const SettingsView: React.FC = () => {
     }
   };
 
+  // Car management functions
+  const handleCreateCar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCar.plate_number.trim() || !newCar.model.trim() || !newCar.manufacturer.trim()) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      setSuccessMessage(null);
+      
+      console.log('=== CREATING CAR ===');
+      console.log('Form data being sent:', newCar);
+      
+      const createdCar = await carService.createCar(newCar);
+      console.log('API Response after creation:', createdCar);
+      
+      setSuccessMessage('Car created successfully!');
+      await loadCars();
+      
+      setNewCar({
+        plate_number: '',
+        model: '',
+        manufacturer: '',
+        year: new Date().getFullYear(),
+        user_id: 1, // Default driver
+        created_by: 1 // Auto-generated/default
+      });
+      setShowCarForm(false);
+      
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create car';
+      setError(errorMessage);
+      console.error('Error creating car:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditCar = (car: Car) => {
+    setEditingCar(car);
+    setNewCar({
+      plate_number: car.plate_number,
+      model: car.model,
+      manufacturer: car.manufacturer,
+      year: car.year,
+      user_id: car.user_id,
+      created_by: car.created_by
+    });
+    setShowCarForm(true);
+  };
+
+  const handleUpdateCar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCar || !newCar.plate_number.trim() || !newCar.model.trim() || !newCar.manufacturer.trim()) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      setSuccessMessage(null);
+      
+      await carService.updateCar(editingCar.id, {
+        plate_number: newCar.plate_number,
+        model: newCar.model,
+        manufacturer: newCar.manufacturer,
+        year: newCar.year,
+        user_id: newCar.user_id,
+        created_by: newCar.created_by
+      });
+      
+      setSuccessMessage('Car updated successfully!');
+      await loadCars();
+      
+      setEditingCar(null);
+      setNewCar({
+        plate_number: '',
+        model: '',
+        manufacturer: '',
+        year: new Date().getFullYear(),
+        user_id: 1, // Default driver
+        created_by: 1 // Auto-generated/default
+      });
+      setShowCarForm(false);
+      
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update car';
+      setError(errorMessage);
+      console.error('Error updating car:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteCar = async (id: number) => {
+    if (window.confirm('Are you sure you want to delete this car?')) {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        await carService.deleteCar(id);
+        setSuccessMessage('Car deleted successfully!');
+        await loadCars();
+        
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to delete car';
+        setError(errorMessage);
+        console.error('Error deleting car:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
   const cancelForm = () => {
     setShowComponentForm(false);
     setShowDeductionForm(false);
+    setShowCarForm(false);
     setEditingComponent(null);
     setEditingDeduction(null);
+    setEditingCar(null);
     setNewComponent({ name: '', title: '', description: '' });
     setNewDeduction({
       activity_id: 1, // Auto-generated/default
       amount: 0,
       description: '',
       is_percentage: false
+    });
+    setNewCar({
+      plate_number: '',
+      model: '',
+      manufacturer: '',
+      year: new Date().getFullYear(),
+      user_id: 1, // Default driver
+      created_by: 1 // Auto-generated/default
     });
     setError(null);
     setSuccessMessage(null);
@@ -375,6 +532,12 @@ const SettingsView: React.FC = () => {
   const filteredDeductions = deductions.filter(deduction =>
     deduction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (deduction.is_percentage ? 'percentage' : 'fixed').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredCars = cars.filter(car =>
+    car.plate_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    car.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    car.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -447,7 +610,8 @@ const SettingsView: React.FC = () => {
           <nav className="-mb-px flex space-x-8">
             {[
               { id: 'components', label: 'Components', count: components.length },
-              { id: 'deductions', label: 'Deductions & Taxes', count: deductions.length }
+              { id: 'deductions', label: 'Deductions & Taxes', count: deductions.length },
+              { id: 'cars', label: 'Cars', count: cars.length }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -473,29 +637,29 @@ const SettingsView: React.FC = () => {
         {/* Components Tab */}
         {activeTab === 'components' && (
           <>
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">Project Components</h2>
-                </div>
-                <button
-                  onClick={() => setShowComponentForm(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Component
-                </button>
               </div>
+              <button
+                onClick={() => setShowComponentForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Component
+              </button>
             </div>
+          </div>
 
-            <div className="p-6">
-              {isLoading ? (
+          <div className="p-6">
+            {isLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-green-600" />
                   <span className="ml-3 text-gray-600">Loading components...</span>
-                </div>
-              ) : (
-                <div className="space-y-4">
+              </div>
+            ) : (
+              <div className="space-y-4">
                   {filteredComponents.length === 0 ? (
                     <div className="text-center py-12">
                       <Building className="w-16 h-16 mx-auto mb-4 text-gray-300" />
@@ -508,59 +672,59 @@ const SettingsView: React.FC = () => {
                         <Plus className="w-4 h-4" />
                         Create Component
                       </button>
-                    </div>
-                  ) : (
+                  </div>
+                ) : (
                     filteredComponents.map((component) => (
                       <div key={component.id} className="group p-6 border border-gray-200 rounded-xl hover:shadow-md transition-all duration-200">
                         <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                  <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <h3 className="text-lg font-semibold text-gray-900">{component.name}</h3>
                               <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                                component.isActive 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                {component.isActive ? 'Active' : 'Inactive'}
-                              </span>
-                            </div>
+                        component.isActive 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {component.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
                             <p className="text-sm font-medium text-gray-700 mb-2">{component.title}</p>
                             <p className="text-sm text-gray-600">{component.description}</p>
-                          </div>
+                  </div>
                           <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleToggleComponentStatus(component.id)}
+                    <button
+                      onClick={() => handleToggleComponentStatus(component.id)}
                               className={`p-2 rounded-lg transition-colors ${
-                                component.isActive 
+                        component.isActive 
                                   ? 'text-red-600 hover:bg-red-50' 
                                   : 'text-green-600 hover:bg-green-50'
-                              }`}
+                      }`}
                               title={component.isActive ? 'Deactivate' : 'Activate'}
-                            >
+                    >
                               <CheckCircle className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEditComponent(component)}
+                    </button>
+                    <button
+                      onClick={() => handleEditComponent(component)}
                               className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                               title="Edit"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteComponent(component.id)}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteComponent(component.id)}
                               className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
                               title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                           </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
+                  </div>
                 </div>
-              )}
-            </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
           </>
         )}
 
@@ -568,29 +732,29 @@ const SettingsView: React.FC = () => {
         {/* Deductions Tab */}
         {activeTab === 'deductions' && (
           <>
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">Deductions & Taxes</h2>
-                </div>
-                <button
+              </div>
+              <button
                   onClick={() => setShowDeductionForm(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
+              >
+                <Plus className="w-4 h-4" />
                   Add Deduction/Tax
-                </button>
-              </div>
+              </button>
             </div>
+          </div>
 
-            <div className="p-6">
+          <div className="p-6">
               {isLoadingDeductions ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
                   <span className="ml-3 text-gray-600">Loading deductions...</span>
                 </div>
               ) : (
-                <div className="space-y-4">
+            <div className="space-y-4">
                   {filteredDeductions.length === 0 ? (
                     <div className="text-center py-12">
                       <DollarSign className="w-16 h-16 mx-auto mb-4 text-gray-300" />
@@ -608,7 +772,7 @@ const SettingsView: React.FC = () => {
                     filteredDeductions.map((deduction) => (
                       <div key={deduction.id} className="group p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200">
                         <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                  <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <h3 className="text-base font-medium text-gray-900">{deduction.description}</h3>
                               <span className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -617,8 +781,8 @@ const SettingsView: React.FC = () => {
                                   : 'bg-green-100 text-green-800'
                               }`}>
                                 {!deduction.is_percentage ? 'Fixed Amount' : 'Percentage'}
-                              </span>
-                            </div>
+                      </span>
+                    </div>
                             <div className="flex items-center gap-4 text-sm text-gray-600">
                               <div className="flex items-center gap-1">
                                 {deduction.is_percentage ? (
@@ -631,36 +795,123 @@ const SettingsView: React.FC = () => {
                                     {formatCurrency(deduction.amount)}
                                   </>
                                 )}
-                              </div>
+                  </div>
                               <div className="flex items-center gap-1">
                                 <Calendar className="w-4 h-4" />
                                 {formatDate(deduction.date_created)}
                               </div>
                             </div>
-                          </div>
+                  </div>
                           <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
+                    <button
                               onClick={() => handleEditDeduction(deduction)}
                               className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                               title="Edit"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
                               onClick={() => handleDeleteDeduction(deduction.id)}
                               className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
                               title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
                       </div>
                     ))
                   )}
                 </div>
               )}
             </div>
+          </>
+        )}
+
+        {/* Cars Tab */}
+        {activeTab === 'cars' && (
+          <>
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Cars Management</h2>
+                </div>
+                <button
+                  onClick={() => setShowCarForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Car
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {isLoadingCars ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                  <span className="ml-3 text-gray-600">Loading cars...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredCars.length === 0 ? (
+                    <div className="text-center py-12">
+                      <CarIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No cars found</h3>
+                      <p className="text-gray-500 mb-4">Add cars to manage your fleet.</p>
+                      <button
+                        onClick={() => setShowCarForm(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Car
+                      </button>
+                    </div>
+                  ) : (
+                    filteredCars.map((car) => (
+                      <div key={car.id} className="group p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="text-base font-medium text-gray-900">{car.manufacturer} {car.model}</h3>
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                {car.plate_number}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-gray-600">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-4 h-4" />
+                                {car.year}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <User className="w-4 h-4" />
+                                Driver ID: {car.user_id}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleEditCar(car)}
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                              title="Edit"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                              onClick={() => handleDeleteCar(car.id)}
+                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                              title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+            </div>
+                    ))
+                  )}
+          </div>
+              )}
+        </div>
           </>
         )}
       </div>
@@ -784,7 +1035,7 @@ const SettingsView: React.FC = () => {
               <div>
                 <h3 className="text-xl font-semibold text-gray-900">
                   {editingDeduction ? 'Edit Deduction/Tax' : 'Create New Deduction/Tax'}
-                </h3>
+              </h3>
               </div>
               <button
                 onClick={cancelForm}
@@ -872,8 +1123,137 @@ const SettingsView: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4" />
+                  <Save className="w-4 h-4" />
                       {editingDeduction ? 'Update Deduction/Tax' : 'Create Deduction/Tax'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Car Form Modal */}
+      {showCarForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {editingCar ? 'Edit Car' : 'Add New Car'}
+                </h3>
+              </div>
+              <button
+                onClick={cancelForm}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={editingCar ? handleUpdateCar : handleCreateCar} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Plate Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newCar.plate_number}
+                  onChange={(e) => setNewCar({ ...newCar, plate_number: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  placeholder="Enter plate number (e.g., XYZ-5678)"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Manufacturer <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newCar.manufacturer}
+                  onChange={(e) => setNewCar({ ...newCar, manufacturer: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  placeholder="Enter manufacturer (e.g., Honda)"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Model <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newCar.model}
+                  onChange={(e) => setNewCar({ ...newCar, model: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  placeholder="Enter model (e.g., Civic)"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Year <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1900"
+                  max={new Date().getFullYear() + 1}
+                  value={newCar.year}
+                  onChange={(e) => setNewCar({ ...newCar, year: Number(e.target.value) })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  placeholder="Enter year"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Driver ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={newCar.user_id}
+                  onChange={(e) => setNewCar({ ...newCar, user_id: Number(e.target.value) })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  placeholder="Enter driver ID"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={cancelForm}
+                  disabled={isLoading}
+                  className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading || !newCar.plate_number.trim() || !newCar.model.trim() || !newCar.manufacturer.trim()}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {editingCar ? 'Updating...' : 'Creating...'}
+                    </>
+                  ) : (
+                    <>
+                  <Save className="w-4 h-4" />
+                      {editingCar ? 'Update Car' : 'Add Car'}
                     </>
                   )}
                 </button>

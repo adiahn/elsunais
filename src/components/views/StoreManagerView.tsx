@@ -148,9 +148,7 @@ const StoreManagerView: React.FC = () => {
       const apiRequests = await storeService.getRequests();
       console.log('Fetched requests from API:', apiRequests);
       
-      // Convert API requests to local format
       const localRequests: LocalItemRequest[] = apiRequests.map(apiReq => {
-        // Find the corresponding item - try both string and number matching
         const item = items.find(item => 
           item.id === apiReq.item_id.toString() || 
           item.id === apiReq.item_id ||
@@ -160,8 +158,7 @@ const StoreManagerView: React.FC = () => {
         const itemType = item?.type || 'consumable';
         const itemName = item?.name || `Item ID: ${apiReq.item_id}`;
         
-        // Debug logging
-        console.log('Processing request:', {
+          console.log('Processing request:', {
           requestId: apiReq.id,
           itemId: apiReq.item_id,
           availableItems: items.map(i => ({ id: i.id, name: i.name })),
@@ -170,10 +167,9 @@ const StoreManagerView: React.FC = () => {
           itemName
         });
         
-        // For consumables: auto-approve, for non-consumables: need approval
-        let status = apiReq.status || 'pending';
+          let status = apiReq.status || 'pending';
         if (itemType === 'consumable' && status === 'pending') {
-          status = 'approved'; // Auto-approve consumables
+          status = 'approved';
         }
         
         const canReturn = itemType === 'non_consumable' && status === 'issued';
@@ -185,7 +181,6 @@ const StoreManagerView: React.FC = () => {
           itemType: itemType,
           quantity: apiReq.quantity,
           unit: 'units',
-          purpose: 'General use', // Default purpose since API doesn't have this
           status: status,
           requestDate: apiReq.requested_date || new Date().toISOString().split('T')[0],
           approvedDate: itemType === 'consumable' ? (apiReq.requested_date || new Date().toISOString().split('T')[0]) : apiReq.approved_date,
